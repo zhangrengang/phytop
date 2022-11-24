@@ -9,7 +9,7 @@ import itertools
 from Bio import SeqIO, Phylo
 from lazy_property import LazyWritableProperty as lazyproperty
 
-from OrthoFinder import catAln, format_id_for_iqtree, OrthoMCLGroupRecord
+from OrthoFinder import catAln, format_id_for_iqtree, OrthoMCLGroupRecord, OrthoFinder
 from small_tools import mkdirs, flatten, test_s, test_f
 from RunCmdsMP import run_cmd, run_job, logger
 #from creat_ctl import sort_version
@@ -214,6 +214,11 @@ class Collinearity():
 		genes2 = [gene2]
 		self.parse_species(gene1, gene2)
 		self.parse_genes(genes1,genes2)
+	def get_species(self):
+		species = set([])
+		for rc in self:
+			species = species | {rc.species1, rc.species2}
+		return species
 	@property
 	def gene_pairs(self):
 		return [tuple(map(self.gene2geneid, pair)) for pair in self.pairs]
@@ -747,7 +752,83 @@ def gene_retention(collinearity, spsd, gff):
 
 GenetreesTitle = ['OG', 'genes', 'genetree', 'min_bootstrap', 'topology_species',
 				'chromosomes', 'topology_chromosomes']
-				
+class ToAstral(ColinearGroups):
+	def __init__(self, input, pep, spsd=None, cds=None, tmpdir='tmp', root=None, both=False,
+			ncpu=20, max_taxa_missing=0.4, max_mean_copies=5, singlecopy=False):
+		self.input = input
+		self.pep = pep
+		self.cds = cds
+		self.spsd = spsd
+		self.root = root
+		self.both = both
+		self.ncpu = ncpu
+		self.tmpdir = tmpdir
+		self.max_taxa_missing = max_taxa_missing
+		self.singlecopy = singlecopy
+	def lazy_get_groups(self):
+		species = parse_species(species)
+		if os.path.isdir(self.input):
+			result = OrthoFinder(self.input)
+			if species is None:
+				species = result.Species
+			groups = result.get_orthologs_cluster(sps=species)
+		else:
+			if species is None:
+				species = Collinearity(self.input).get_species()
+			result = ColinearGroups(self.input, spsd=self.spsd)
+			groups = result.groups
+		self.species = species
+		return groups
+	def run(self):
+		mafft_template = 'mafft --auto {} > {} 2> /dev/null'
+		pal2nal_template = 'pal2nal.pl -output fasta {} {} > {}'
+		trimal_template = 'trimal -automated1 -in {} -out {} > /dev/null'
+		iqtree_template = 'iqtree -s {} -bb 1000 -nt 1 > /dev/null'
+		mkdirs(self.tmpdir)
+		d_pep = seq2dict(self.pep)
+		d_cds = seq2dict(self.cds) if self.cds else {}
+		d_idmap = {}
+		pepTreefiles, cdsTreefiles = [], []
+		cmd_list = []
+		for grp in self.lazy_get_groups():
+			ogid = grp.ogid
+			pepSeq = '{}/{}.pep'.format(self.tmpdir, ogid)
+			cdsSeq = '{}/{}.cds'.format(self.tmpdir, ogid)
+			pepAln = pepSeq + '.aln'
+			cdsAln = cdsSeq + '.aln'
+			pepTrim = pepAln + '.trimal'
+			cdsTrim = cdsAln + '.trimal'
+			pepTreefile = pepTrim + '.treefile'
+			cdsTreefile = cdsTrim + '.treefile'
+			treefile = cdsTreefile if self.cds else pepTreefile
+			cmd = '[ ! -s {} ]'.format(treefile)
+			cmds = [cmd]
+			cmd = mafft_template.format(pepSeq, pepAln)
+			cmds += [cmd]
+			pep = True
+			if self.cds:
+				cmd = pal2nal_template.format(pepAln, cdsSeq, cdsAln)
+				cmds += [cmd]
+				cmd = trimal_template.format(cdsAln, cdsTrim)
+				cmds += [cmd]
+				cmd = iqtree_template.format(cdsTrim)
+				cmds += [cmd]
+				cdsTreefiles += [cdsTreefile]
+				pep = True if self.both else False
+			if pep:
+				cmd = trimal_template.format(pepAln, pepTrim)
+                cmds += [cmd]
+                cmd = iqtree_template.format(pepTrim)
+                cmds += [cmd]
+				pepTreefiles += [pepTreefile]
+			cmds = ' && '.join(cmds)
+			cmd_list += [cmds]
+		nbin = 10
+		cmd_file = '{}/cmds.list'.format(self.tmpdir)
+		run_job(cmd_file, cmd_list=cmd_list2, tc_tasks=self.ncpu, by_bin=nbin)
+		pepGenetrees = 'pep.for_astral.genetrees'
+		cdsGenetrees = 'cds.for_astral.genetrees'
+		
 class ColinearGroups:
 	def __init__(self, collinearity, spsd=None, 
 				kaks=None, seqfile=None, gff=None, 
@@ -775,8 +856,11 @@ class ColinearGroups:
 				continue
 			for pair in rc.pairs:
 				G.add_edge(*pair)
+		i = 0
 		for cmpt in nx.connected_components(G):
-			yield OrthoMCLGroupRecord(genes=cmpt)
+			i += 1
+			ogid = 'SOG{}'.format(i)
+			yield OrthoMCLGroupRecord(genes=cmpt, ogid=ogid)
 	def to_synet(self, fout=sys.stdout):
 		d_profile = dict([(sp, []) for sp in self.sp_dict.keys()])
 		i = 0
