@@ -202,6 +202,10 @@ class OrthoMCLGroupRecord(GroupRecord): # 解析每行
 			except KeyError:  d[sp] = [gene]
 		return d
 	
+	@property
+	def mean_copies(self):
+		copies = [len(genes) for sp, genes in self.spdict.items()]
+		return 1.0* sum(copies) / len(copies)
 
 	def write(self, fout):
 		print >>fout, '{}: {}'.format(self.ogid, ' '.join(self.genes))

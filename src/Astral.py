@@ -8,7 +8,7 @@ def convertNHX(inNwk, ):
 	def convert(line):
 		last_end = 0
 		patterns = []
-		for match in re.compile(r"'\[(\S+?)\]':(\d+.\d+)").finditer(line):
+		for match in re.compile(r"'\[(\S+?)\]':(\d+\.?\d*)").finditer(line):
 			start = match.start()
 			end = match.end()
 			patterns.append( line[last_end:start] )
@@ -100,7 +100,8 @@ Please check...'.format(self.treefile))
 			eq2 = eq3 = (1-q1) / 2
 			eq1 = 1 - eq2 - eq3
 			ef1, ef2, ef3 = n*eq1, n*eq2, n*eq3
-			chi_sq = (ef1-f1)**2/ef1 + (ef2-f2)**2/ef2 + (ef3-f3)**2/ef3
+			try: chi_sq = (ef1-f1)**2/ef1 + (ef2-f2)**2/ef2 + (ef3-f3)**2/ef3
+			except ZeroDivisionError: chi_sq = 0
 			pval = 1-chi2.cdf(chi_sq, 1)
 			if pval > self.max_pval: # ILS
 				IH_index = 0
@@ -131,7 +132,7 @@ Please check...'.format(self.treefile))
 			text = '$n$={:.0f}\n$P$={}\nILS-e={:.1%}\nIH-e={:.1%}\nILS-i={:.1%}\nIH-i={:.1%}'.format(
 				n, P, ILS_explain, IH_explain, ILS_index, IH_index)
 			outfig = '{}/{}.{}.bar.pdf'.format(self.tmpdir, self.prefix, name)
-			values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, hline=hline, text=text)
+			values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, hline=hline, text=None) #text)
 			
 			face = ImgFace(outfig)
 			#face = faces.SVGFace(outfig)

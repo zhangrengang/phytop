@@ -9,16 +9,16 @@ import itertools
 from Bio import SeqIO, Phylo
 from lazy_property import LazyWritableProperty as lazyproperty
 
-from OrthoFinder import catAln, format_id_for_iqtree, OrthoMCLGroupRecord, OrthoFinder
+from OrthoFinder import catAln, format_id_for_iqtree, OrthoMCLGroupRecord, OrthoFinder, parse_species
 from small_tools import mkdirs, flatten, test_s, test_f
 from RunCmdsMP import run_cmd, run_job, logger
 #from creat_ctl import sort_version
 
 def get_chrom(chrom):
-    try:
-        return chrom.split('|', 1)[1]
-    except IndexError:
-        return chrom
+	try:
+		return chrom.split('|', 1)[1]
+	except IndexError:
+		return chrom
 
 class Gene():
 	def __init__(self, info):
@@ -95,29 +95,29 @@ class KaKs():
 	def write(self, fout):
 		print >>fout, '\t'.join(self.info)
 class KaKsParser:
-    def __init__(self, kaks, **kargs):
-        self.kaks = kaks
-        self.kargs = kargs
-    def __iter__(self):
-        return self._parse()
-    def _parse(self):
-        for line in open(self.kaks):
-            temp = line.rstrip().split()
-            if temp[0] == 'Sequence':
-                if temp[1] == 'dS-YN00':
-                    self.kargs['yn00'] = True
-                elif temp[1] == '4D_Sites':
-                    self.kargs['fdtv'] = True
-                continue
-            kaks = KaKs(temp, **self.kargs)
-            yield kaks
-    def to_dict(self):
-        d = {}
-        for kaks in self:
-            ks = kaks.ks
-            d[kaks.pair] = ks
-            d[tuple(reversed(kaks.pair))] = ks
-        return d
+	def __init__(self, kaks, **kargs):
+		self.kaks = kaks
+		self.kargs = kargs
+	def __iter__(self):
+		return self._parse()
+	def _parse(self):
+		for line in open(self.kaks):
+			temp = line.rstrip().split()
+			if temp[0] == 'Sequence':
+				if temp[1] == 'dS-YN00':
+					self.kargs['yn00'] = True
+				elif temp[1] == '4D_Sites':
+					self.kargs['fdtv'] = True
+				continue
+			kaks = KaKs(temp, **self.kargs)
+			yield kaks
+	def to_dict(self):
+		d = {}
+		for kaks in self:
+			ks = kaks.ks
+			d[kaks.pair] = ks
+			d[tuple(reversed(kaks.pair))] = ks
+		return d
 	
 class Collinearity():
 	'''
@@ -752,83 +752,7 @@ def gene_retention(collinearity, spsd, gff):
 
 GenetreesTitle = ['OG', 'genes', 'genetree', 'min_bootstrap', 'topology_species',
 				'chromosomes', 'topology_chromosomes']
-class ToAstral(ColinearGroups):
-	def __init__(self, input, pep, spsd=None, cds=None, tmpdir='tmp', root=None, both=False,
-			ncpu=20, max_taxa_missing=0.4, max_mean_copies=5, singlecopy=False):
-		self.input = input
-		self.pep = pep
-		self.cds = cds
-		self.spsd = spsd
-		self.root = root
-		self.both = both
-		self.ncpu = ncpu
-		self.tmpdir = tmpdir
-		self.max_taxa_missing = max_taxa_missing
-		self.singlecopy = singlecopy
-	def lazy_get_groups(self):
-		species = parse_species(species)
-		if os.path.isdir(self.input):
-			result = OrthoFinder(self.input)
-			if species is None:
-				species = result.Species
-			groups = result.get_orthologs_cluster(sps=species)
-		else:
-			if species is None:
-				species = Collinearity(self.input).get_species()
-			result = ColinearGroups(self.input, spsd=self.spsd)
-			groups = result.groups
-		self.species = species
-		return groups
-	def run(self):
-		mafft_template = 'mafft --auto {} > {} 2> /dev/null'
-		pal2nal_template = 'pal2nal.pl -output fasta {} {} > {}'
-		trimal_template = 'trimal -automated1 -in {} -out {} > /dev/null'
-		iqtree_template = 'iqtree -s {} -bb 1000 -nt 1 > /dev/null'
-		mkdirs(self.tmpdir)
-		d_pep = seq2dict(self.pep)
-		d_cds = seq2dict(self.cds) if self.cds else {}
-		d_idmap = {}
-		pepTreefiles, cdsTreefiles = [], []
-		cmd_list = []
-		for grp in self.lazy_get_groups():
-			ogid = grp.ogid
-			pepSeq = '{}/{}.pep'.format(self.tmpdir, ogid)
-			cdsSeq = '{}/{}.cds'.format(self.tmpdir, ogid)
-			pepAln = pepSeq + '.aln'
-			cdsAln = cdsSeq + '.aln'
-			pepTrim = pepAln + '.trimal'
-			cdsTrim = cdsAln + '.trimal'
-			pepTreefile = pepTrim + '.treefile'
-			cdsTreefile = cdsTrim + '.treefile'
-			treefile = cdsTreefile if self.cds else pepTreefile
-			cmd = '[ ! -s {} ]'.format(treefile)
-			cmds = [cmd]
-			cmd = mafft_template.format(pepSeq, pepAln)
-			cmds += [cmd]
-			pep = True
-			if self.cds:
-				cmd = pal2nal_template.format(pepAln, cdsSeq, cdsAln)
-				cmds += [cmd]
-				cmd = trimal_template.format(cdsAln, cdsTrim)
-				cmds += [cmd]
-				cmd = iqtree_template.format(cdsTrim)
-				cmds += [cmd]
-				cdsTreefiles += [cdsTreefile]
-				pep = True if self.both else False
-			if pep:
-				cmd = trimal_template.format(pepAln, pepTrim)
-                cmds += [cmd]
-                cmd = iqtree_template.format(pepTrim)
-                cmds += [cmd]
-				pepTreefiles += [pepTreefile]
-			cmds = ' && '.join(cmds)
-			cmd_list += [cmds]
-		nbin = 10
-		cmd_file = '{}/cmds.list'.format(self.tmpdir)
-		run_job(cmd_file, cmd_list=cmd_list2, tc_tasks=self.ncpu, by_bin=nbin)
-		pepGenetrees = 'pep.for_astral.genetrees'
-		cdsGenetrees = 'cds.for_astral.genetrees'
-		
+
 class ColinearGroups:
 	def __init__(self, collinearity, spsd=None, 
 				kaks=None, seqfile=None, gff=None, 
@@ -900,7 +824,7 @@ class ColinearGroups:
 		G = nx.Graph()
 		sp_pairs = set([])
 		for rc in Collinearity(self.collinearity, kaks=self.kaks):
-			if rc.N < self.min_size:    # min length
+			if rc.N < self.min_size:	# min length
 				continue
 			sp_pairs.add(rc.species)
 			for pair in rc.pairs:
@@ -1945,7 +1869,124 @@ class ColinearGroups:
 				d_matrix[sp_pair] += 1
 		print >> sys.stderr, i, 'groups'
 		print d_matrix
-	
+
+class ToAstral(ColinearGroups):
+	def __init__(self, input, pep, spsd=None, cds=None, tmpdir='tmp', root=None, both=True,
+			ncpu=20, max_taxa_missing=0.4, max_mean_copies=5, singlecopy=False):
+		self.input = input
+		self.pep = pep
+		self.cds = cds
+		self.spsd = spsd
+		self.root = root
+		self.both = both
+		self.ncpu = ncpu
+		self.tmpdir = tmpdir
+		self.max_taxa_missing = max_taxa_missing
+		self.max_mean_copies = max_mean_copies
+		self.singlecopy = singlecopy
+	def lazy_get_groups(self):
+		species = parse_species(self.spsd)
+		if os.path.isdir(self.input):
+			source = 'orthofinder'
+			result = OrthoFinder(self.input)
+			if species is None:
+				species = result.Species
+			groups = result.get_orthologs_cluster(sps=species)
+		else:
+			source = 'mcscanx'
+			if species is None:
+				species = Collinearity(self.input).get_species()
+			result = ColinearGroups(self.input, spsd=self.spsd)
+			groups = result.groups
+		self.species = species
+		self.source = source
+		return groups
+	def run(self):
+		mafft_template = 'mafft --auto {} > {} 2> /dev/null'
+		pal2nal_template = 'pal2nal.pl -output fasta {} {} > {}'
+		trimal_template = 'trimal -automated1 -in {} -out {} > /dev/null'
+		iqtree_opts = ' -o {} '.format(self.root) if self.root else ''
+		iqtree_template = 'iqtree -s {{}} -bb 1000 -nt 1 {} > /dev/null'.format(iqtree_opts)
+		mkdirs(self.tmpdir)
+		d_pep = seq2dict(self.pep)
+		d_cds = seq2dict(self.cds) if self.cds else {}
+		d_idmap = {}
+		pepTreefiles, cdsTreefiles = [], []
+		cmd_list = []
+		for og in self.lazy_get_groups():
+			species = og.species
+			nsp = len(set(species))
+			genes = og.genes
+			if self.singlecopy:
+				d_singlecopy = {genes[0]: sp for sp, genes in og.spdict.items() if len(genes)==1}
+				singlecopy_ratio = 1.0*len(d_singlecopy) / len(self.species)
+				if 1-singlecopy_ratio > self.max_taxa_missing:
+					 continue
+				iters = d_singlecopy.items()
+			else:
+				taxa_missing = 1 - 1.0*nsp / len(self.species)
+				if taxa_missing > self.max_taxa_missing:
+					continue
+				if og.mean_copies > self.max_mean_copies:
+					continue
+				iters = zip(genes, species)
+			ogid = og.ogid
+			pepSeq = '{}/{}.pep'.format(self.tmpdir, ogid)
+			cdsSeq = '{}/{}.cds'.format(self.tmpdir, ogid)
+			f_pep = open(pepSeq, 'w')
+			f_cds = open(cdsSeq, 'w')
+			for gene, sp in iters:
+				try: rc = d_pep[gene]
+				except KeyError:
+					logger.warn('{} not found in {}; skipped'.format(gene, self.pep))
+					continue
+				rc.id = format_id_for_iqtree(gene)
+				d_idmap[rc.id] = sp
+				SeqIO.write(rc, f_pep, 'fasta')
+				if self.cds:
+					rc = d_cds[gene]
+					rc.id = format_id_for_iqtree(gene)
+					SeqIO.write(rc, f_cds, 'fasta')
+			f_pep.close()
+			f_cds.close()
+
+			pepAln = pepSeq + '.aln'
+			cdsAln = cdsSeq + '.aln'
+			pepTrim = pepAln + '.trimal'
+			cdsTrim = cdsAln + '.trimal'
+			pepTreefile = pepTrim + '.treefile'
+			cdsTreefile = cdsTrim + '.treefile'
+			treefile = cdsTreefile if self.cds else pepTreefile
+			cmd = '[ ! -s {} ]'.format(treefile)
+			cmds = [cmd]
+			cmd = mafft_template.format(pepSeq, pepAln)
+			cmds += [cmd]
+			pep = True
+			if self.cds:
+				cmd = pal2nal_template.format(pepAln, cdsSeq, cdsAln)
+				cmds += [cmd]
+				cmd = trimal_template.format(cdsAln, cdsTrim)
+				cmds += [cmd]
+				cmd = iqtree_template.format(cdsTrim)
+				cmds += [cmd]
+				cdsTreefiles += [cdsTreefile]
+				pep = True if self.both else False
+			if pep:
+				cmd = trimal_template.format(pepAln, pepTrim)
+				cmds += [cmd]
+				cmd = iqtree_template.format(pepTrim)
+				cmds += [cmd]
+				pepTreefiles += [pepTreefile]
+			cmds = ' && '.join(cmds)
+			cmd_list += [cmds]
+		nbin = 10
+		cmd_file = '{}/{}.cmds.list'.format(self.tmpdir, self.source)
+		run_job(cmd_file, cmd_list=cmd_list, tc_tasks=self.ncpu, by_bin=nbin, fail_exit=False)
+		pepGenetrees = 'pep.{}_to_astral.genetrees'.format(self.source)
+		cdsGenetrees = 'cds.{}_to_astral.genetrees'.format(self.source)
+		for treefiles, genetrees in zip([pepTreefiles, cdsTreefiles], [pepGenetrees, cdsGenetrees]):
+			self.cat_genetrees(treefiles, genetrees, idmap=d_idmap, plain=False, format_confidence='%d')
+
 def parse_spsd(spsd):
 	d = OrderedDict()
 	if spsd is None:
@@ -2177,6 +2218,9 @@ def main():
 	elif subcmd == 'bin_ks':
 		collinearity, gff, kaks, sp1, sp2 = sys.argv[2:7]
 		bin_ks_by_chrom(collinearity, gff, kaks, sp1, sp2)
+	elif subcmd == 'to_astral':
+		input, pep = sys.argv[2:4]
+		ToAstral(input, pep).run()
 	else:
 		raise ValueError('Unknown sub command: {}'.format(subcmd))
 if __name__ == '__main__':
