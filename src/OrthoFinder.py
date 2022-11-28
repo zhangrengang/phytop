@@ -304,7 +304,8 @@ def to_astral(ResultsDir, pepSeq, outTrees, species=None, tmpdir='/io/tmp/share'
 		outSeq = '{}/{}.pep'.format(tmpdir, og.ogid)
 		f = open(outSeq, 'w')
 		for gene, sp in d_singlecopy.items():
-			rc = d_seqs[gene]
+			try: rc = d_seqs[gene]
+			except KeyError: continue
 			rc.id = sp
 			SeqIO.write(rc, f, 'fasta')
 		f.close()

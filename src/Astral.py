@@ -97,7 +97,7 @@ Please check...'.format(self.treefile))
 			q1, q2, q3 = f1/n, f2/n, f3/n
 			coalescent_unit = node.dist
 			#eq2 = eq3 = math.exp(-coalescent_unit) / 3	# expected
-			eq2 = eq3 = (1-q1) / 2
+			eq2 = eq3 = (1-q1) / 2	# expected
 			eq1 = 1 - eq2 - eq3
 			ef1, ef2, ef3 = n*eq1, n*eq2, n*eq3
 			try: chi_sq = (ef1-f1)**2/ef1 + (ef2-f2)**2/ef2 + (ef3-f3)**2/ef3
@@ -116,6 +116,7 @@ Please check...'.format(self.treefile))
 				ILS_index = xq3
 				ILS_explain = xq3*2
 				hline = xq3
+			hline = math.exp(-coalescent_unit) / 3 # expected
 			ILS_index = ILS_index / (1.0/3)
 			IH_index = IH_index
 			print(hline, pval, i, f1, f2, f3, n, [q1, q2, q3])
@@ -132,7 +133,7 @@ Please check...'.format(self.treefile))
 			text = '$n$={:.0f}\n$P$={}\nILS-e={:.1%}\nIH-e={:.1%}\nILS-i={:.1%}\nIH-i={:.1%}'.format(
 				n, P, ILS_explain, IH_explain, ILS_index, IH_index)
 			outfig = '{}/{}.{}.bar.pdf'.format(self.tmpdir, self.prefix, name)
-			values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, hline=hline, text=None) #text)
+			values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, hline=hline, text=text)
 			
 			face = ImgFace(outfig)
 			#face = faces.SVGFace(outfig)

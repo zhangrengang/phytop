@@ -1872,7 +1872,7 @@ class ColinearGroups:
 
 class ToAstral(ColinearGroups):
 	def __init__(self, input, pep, spsd=None, cds=None, tmpdir='tmp', root=None, both=True,
-			ncpu=20, max_taxa_missing=0.4, max_mean_copies=5, singlecopy=False):
+			ncpu=20, max_taxa_missing=0.5, max_mean_copies=5, singlecopy=False, fast=True):
 		self.input = input
 		self.pep = pep
 		self.cds = cds
@@ -1884,6 +1884,7 @@ class ToAstral(ColinearGroups):
 		self.max_taxa_missing = max_taxa_missing
 		self.max_mean_copies = max_mean_copies
 		self.singlecopy = singlecopy
+		self.fast = fast
 	def lazy_get_groups(self):
 		species = parse_species(self.spsd)
 		if os.path.isdir(self.input):
@@ -1905,14 +1906,14 @@ class ToAstral(ColinearGroups):
 		mafft_template = 'mafft --auto {} > {} 2> /dev/null'
 		pal2nal_template = 'pal2nal.pl -output fasta {} {} > {}'
 		trimal_template = 'trimal -automated1 -in {} -out {} > /dev/null'
-		iqtree_opts = ' -o {} '.format(self.root) if self.root else ''
-		iqtree_template = 'iqtree -s {{}} -bb 1000 -nt 1 {} > /dev/null'.format(iqtree_opts)
+		iqtree_template = 'iqtree -s {} -bb 1000 -nt 1 {} > /dev/null'
 		mkdirs(self.tmpdir)
 		d_pep = seq2dict(self.pep)
 		d_cds = seq2dict(self.cds) if self.cds else {}
 		d_idmap = {}
 		pepTreefiles, cdsTreefiles = [], []
 		cmd_list = []
+		roots = []
 		for og in self.lazy_get_groups():
 			species = og.species
 			nsp = len(set(species))
@@ -1930,11 +1931,14 @@ class ToAstral(ColinearGroups):
 				if og.mean_copies > self.max_mean_copies:
 					continue
 				iters = zip(genes, species)
+			if len(iters) < 4:
+				continue
 			ogid = og.ogid
 			pepSeq = '{}/{}.pep'.format(self.tmpdir, ogid)
 			cdsSeq = '{}/{}.cds'.format(self.tmpdir, ogid)
 			f_pep = open(pepSeq, 'w')
 			f_cds = open(cdsSeq, 'w')
+			root = ''
 			for gene, sp in iters:
 				try: rc = d_pep[gene]
 				except KeyError:
@@ -1947,6 +1951,8 @@ class ToAstral(ColinearGroups):
 					rc = d_cds[gene]
 					rc.id = format_id_for_iqtree(gene)
 					SeqIO.write(rc, f_cds, 'fasta')
+				if sp == self.root:
+					root = rc.id
 			f_pep.close()
 			f_cds.close()
 
@@ -1961,24 +1967,30 @@ class ToAstral(ColinearGroups):
 			cmds = [cmd]
 			cmd = mafft_template.format(pepSeq, pepAln)
 			cmds += [cmd]
+			iqtree_opts0 = ' -o {} '.format(root) if root else ''
 			pep = True
 			if self.cds:
+				iqtree_opts = iqtree_opts0 + ' -mset GTR ' if self.fast else iqtree_opts0 
 				cmd = pal2nal_template.format(pepAln, cdsSeq, cdsAln)
 				cmds += [cmd]
 				cmd = trimal_template.format(cdsAln, cdsTrim)
 				cmds += [cmd]
-				cmd = iqtree_template.format(cdsTrim)
+				cmd = iqtree_template.format(cdsTrim, iqtree_opts)
 				cmds += [cmd]
 				cdsTreefiles += [cdsTreefile]
 				pep = True if self.both else False
 			if pep:
+				iqtree_opts = iqtree_opts0 + ' -mset JTT ' if self.fast else iqtree_opts0
 				cmd = trimal_template.format(pepAln, pepTrim)
 				cmds += [cmd]
-				cmd = iqtree_template.format(pepTrim)
+				cmd = iqtree_template.format(pepTrim, iqtree_opts)
 				cmds += [cmd]
 				pepTreefiles += [pepTreefile]
+			roots += [root]
 			cmds = ' && '.join(cmds)
 			cmd_list += [cmds]
+		pepGenetrees = [t for _, t in sorted(zip(roots, pepGenetrees), reverse=1)]	# prefer to root
+		cdsGenetrees = [t for _, t in sorted(zip(roots, cdsGenetrees), reverse=1)]
 		nbin = 10
 		cmd_file = '{}/{}.cmds.list'.format(self.tmpdir, self.source)
 		run_job(cmd_file, cmd_list=cmd_list, tc_tasks=self.ncpu, by_bin=nbin, fail_exit=False)
