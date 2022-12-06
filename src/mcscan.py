@@ -1931,6 +1931,7 @@ class ToAstral(ColinearGroups):
 				if og.mean_copies > self.max_mean_copies:
 					continue
 				iters = zip(genes, species)
+			iters = list(iters)
 			if len(iters) < 4:
 				continue
 			ogid = og.ogid
@@ -1989,8 +1990,8 @@ class ToAstral(ColinearGroups):
 			roots += [root]
 			cmds = ' && '.join(cmds)
 			cmd_list += [cmds]
-		pepGenetrees = [t for _, t in sorted(zip(roots, pepGenetrees), reverse=1)]	# prefer to root
-		cdsGenetrees = [t for _, t in sorted(zip(roots, cdsGenetrees), reverse=1)]
+		pepTreefiles = [t for _, t in sorted(zip(roots, pepTreefiles), reverse=1)]	# prefer to root
+		cdsTreefiles = [t for _, t in sorted(zip(roots, cdsTreefiles), reverse=1)]
 		nbin = 10
 		cmd_file = '{}/{}.cmds.list'.format(self.tmpdir, self.source)
 		run_job(cmd_file, cmd_list=cmd_list, tc_tasks=self.ncpu, by_bin=nbin, fail_exit=False)

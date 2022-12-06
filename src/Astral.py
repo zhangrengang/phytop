@@ -24,16 +24,19 @@ def convertNHX(inNwk, ):
 	return ''.join(nwk)
 
 class AstralTree:
-	def __init__(self, astral, show=None, max_pval=0.05, tmpdir='tmp', prefix=None, collapsed=None, subset=None):
+	def __init__(self, astral, show=None, max_pval=0.05, tmpdir='tmp', prefix=None, 
+			collapsed=None, subset=None, sort=False, notext=False):
 		self.treefile = astral
 		self.treestr = convertNHX(self.treefile)
 		self.tree = Tree(self.treestr)
 		self.max_pval = max_pval
 		self.tmpdir = tmpdir
 		self.prefix = prefix
-		self.collapsed = collapsed
-		self.subset = subset
-		self.show = show
+		self.collapsed = collapsed	# collapse some clades
+		self.subset = subset	# only show a subset taxa
+		self.show = show	# show another tree
+		self.sort = sort	# sort q1,q2,q3 or not
+		self.notext = notext # draw text or not
 		if self.prefix is None:
 			self.prefix = os.path.basename(self.treefile)
 		
@@ -82,6 +85,9 @@ Please check...'.format(self.treefile))
 			
 		i = 0
 #		f_nodes = open('{}/{}.nodes.tsv'.format(self.tmpdir, self.prefix), 'w')
+		f_info = open('{}.info.tsv'.format(self.prefix), 'w')
+		line = ['node', 'n', 'p_value', 'q1', 'q2', 'q3', 'ILS_explain', 'IH_explain', 'ILS_index', 'IH_index']
+		f_info.write('\t'.join(line)+'\n')
 		for node in self.tree.traverse():
 			if node.is_leaf():
 				node.sp = '{}'.format(node.name.replace('_', " "))
@@ -116,7 +122,8 @@ Please check...'.format(self.treefile))
 				ILS_index = xq3
 				ILS_explain = xq3*2
 				hline = xq3
-			hline = math.exp(-coalescent_unit) / 3 # expected
+		#	hline = math.exp(-coalescent_unit) / 3 # expected
+		#	hline = (1-q1) / 2
 			ILS_index = ILS_index / (1.0/3)
 			IH_index = IH_index
 			print(hline, pval, i, f1, f2, f3, n, [q1, q2, q3])
@@ -133,16 +140,19 @@ Please check...'.format(self.treefile))
 			text = '$n$={:.0f}\n$P$={}\nILS-e={:.1%}\nIH-e={:.1%}\nILS-i={:.1%}\nIH-i={:.1%}'.format(
 				n, P, ILS_explain, IH_explain, ILS_index, IH_index)
 			outfig = '{}/{}.{}.bar.pdf'.format(self.tmpdir, self.prefix, name)
-			values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, hline=hline, text=text)
+			values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, hline=hline, text=text, sort=self.sort, notext=self.notext)
 			
 			face = ImgFace(outfig)
 			#face = faces.SVGFace(outfig)
 #			face = faces.BarChartFace(values, colors=colors, labels=labels, min_value=0, max_value=1, width=100, height=100, label_fsize=2, scale_fsize=2)
 			#faces.add_face_to_node(face, node, column=0)
 			node.add_face(face, column=0, position="branch-right")
-#		f_nodes.close()
+			line = [name, n, pval, q1, q2, q3, ILS_explain, IH_explain, ILS_index, IH_index]
+			line = map(str, line)
+			f_info.write('\t'.join(line)+'\n')
+		f_info.close()
 		# write tree
-		self.tree.write(format=1, outfile='{}/{}.node.tree'.format(self.tmpdir, self.prefix))
+		self.tree.write(format=1, outfile='{}/{}.label.tree'.format(self.tmpdir, self.prefix))
 		#	node.img_style["size"] = 0
 		ts = TreeStyle()
 		ts.show_leaf_name = False
@@ -202,11 +212,12 @@ def collapsed_leaf(node):
 
 
 colors = ('#1f77b4', '#ff7f0e', '#2ca02c', '#d62728')
-def plot_bar(qs=[1,0,0], outfig=None, hline=None, ymax=1, text=None):
+def plot_bar(qs=[1,0,0], outfig=None, hline=None, ymax=1, text=None, sort=False, notext=False):
 	import matplotlib.pyplot as plt
 	import matplotlib
 	matplotlib.rcParams['ytick.minor.visible'] = True
-
+	if sort:
+		qs = list(sorted(qs, reverse=1))
 	plt.figure(figsize=(3,3))
 	x = list(range(len(qs)))
 	labs = ['q{}'.format(v+1) for v in x]
@@ -215,7 +226,7 @@ def plot_bar(qs=[1,0,0], outfig=None, hline=None, ymax=1, text=None):
 	plt.bar(x, qs, color=cs, tick_label=labs, align='center', width=0.67)
 	if hline is not None:
 		plt.axhline(y=hline, color='gray', ls='--')
-	if text is not None:
+	if text is not None and not notext:
 		plt.text(0.3*max(x), 0.98*ymax, text, fontsize=14,
 				horizontalalignment='left', verticalalignment='top')
 	plt.ylim(0, ymax)
