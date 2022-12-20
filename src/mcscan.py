@@ -10,7 +10,7 @@ from Bio import SeqIO, Phylo
 from lazy_property import LazyWritableProperty as lazyproperty
 
 from OrthoFinder import catAln, format_id_for_iqtree, OrthoMCLGroupRecord, OrthoFinder, parse_species
-from small_tools import mkdirs, flatten, test_s, test_f
+from small_tools import mkdirs, flatten, test_s, test_f, parse_kargs
 from RunCmdsMP import run_cmd, run_job, logger
 #from creat_ctl import sort_version
 
@@ -1872,7 +1872,7 @@ class ColinearGroups:
 
 class ToAstral(ColinearGroups):
 	def __init__(self, input, pep, spsd=None, cds=None, tmpdir='tmp', root=None, both=True,
-			ncpu=20, max_taxa_missing=0.5, max_mean_copies=5, singlecopy=False, fast=True):
+			ncpu=20, max_taxa_missing=0.5, max_mean_copies=10, singlecopy=False, fast=True):
 		self.input = input
 		self.pep = pep
 		self.cds = cds
@@ -1885,14 +1885,19 @@ class ToAstral(ColinearGroups):
 		self.max_mean_copies = max_mean_copies
 		self.singlecopy = singlecopy
 		self.fast = fast
-	def lazy_get_groups(self):
+	def lazy_get_groups(self, orthtype='Orthogroups'):
 		species = parse_species(self.spsd)
 		if os.path.isdir(self.input):
-			source = 'orthofinder'
+			source = 'orthofinder' + '-' + orthtype.lower()
 			result = OrthoFinder(self.input)
 			if species is None:
 				species = result.Species
-			groups = result.get_orthologs_cluster(sps=species)
+			if orthtype.lower() == 'orthogroups':
+				groups = result.get_orthogroups(sps=species)
+			elif orthtype.lower() == 'orthologues':
+				groups = result.get_orthologs_cluster(sps=species)
+			else:
+				raise ValueError("Unknown type: {}. MUST in ('orthogroups', 'orthologues')".format(orthtype))
 		else:
 			source = 'mcscanx'
 			if species is None:
@@ -2159,6 +2164,7 @@ def count_genes(collinearity, sp1, sp2):
 def main():
 	import sys
 	subcmd = sys.argv[1]
+	kargs = parse_kargs(sys.argv)
 	if subcmd == 'list_blocks':	# 列出所有共线性块
 		list_blocks(collinearity=sys.argv[2], outTsv=sys.stdout, gff=sys.argv[3], kaks=sys.argv[4])
 	elif subcmd == 'gene_class': # 按共线性块的分类对基因对进行分类
@@ -2233,7 +2239,7 @@ def main():
 		bin_ks_by_chrom(collinearity, gff, kaks, sp1, sp2)
 	elif subcmd == 'to_astral':
 		input, pep = sys.argv[2:4]
-		ToAstral(input, pep).run()
+		ToAstral(input, pep, **kargs).run()
 	else:
 		raise ValueError('Unknown sub command: {}'.format(subcmd))
 if __name__ == '__main__':

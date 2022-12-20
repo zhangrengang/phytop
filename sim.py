@@ -4,7 +4,7 @@ from small_tools import rmdirs
 def main(inPar, outTrees=sys.stdout, n=10000):
 	i = 0
 	
-	cmd = 'fsc27 -i {} -n 100 -c 10 -T'.format(inPar)
+	cmd = 'fsc27 -i {} -n 10000 -c 10 -T'.format(inPar)
 	outdir = os.path.splitext(inPar)[0]
 	while True:
 		run_cmd(cmd)

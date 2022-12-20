@@ -279,7 +279,7 @@ def to_astral(ResultsDir, pepSeq, outTrees, species=None, tmpdir='/io/tmp/share'
 	tmpdir = '{}/to_astral.{}'.format(tmpdir, os.getpid())
 	logger.info('change tmpdir to {}'.format(tmpdir))
 	if not os.path.exists(tmpdir):
-		os.mkdir(tmpdir)
+		mkdirs(tmpdir)
 	species = parse_species(species)
 	#print >>sys.stderr, species
 	result = OrthoFinder(ResultsDir)

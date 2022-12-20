@@ -1,4 +1,4 @@
-#!/bin/bash python
+#!/bin/env python
 from src.plot import main as _main
 def main():
 	_main()
