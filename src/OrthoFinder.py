@@ -4,6 +4,7 @@ import glob, re
 import itertools
 from Bio import SeqIO
 from Bio import Phylo
+import numpy as np
 try: from xopen import xopen as open
 except ImportError: from small_tools import open_file as open
 from small_tools import mkdirs,flattern
@@ -274,6 +275,91 @@ def venn(ResultsDir, outTsv, species=None):
 	for sp, ogs in sorted(d_groups.items()):
 		line = [sp] + ogs
 		print >> outTsv, '\t'.join(line)
+def pan_stats(OFdir, species):
+	result = OrthoFinder(OFdir)
+	species = parse_species(species, result)
+	d_groups = {}
+	for group in result.get_orthogroups(species):
+		ogid = group.ogid
+		for sp in set(group.species):
+			try: d_groups[sp].add(ogid)
+			except KeyError: d_groups[sp] = {ogid}
+	d_groups = OrderedDict((sp, d_groups[sp]) for sp in species])
+	_flower_plot(d_groups, outfig='Flower.plot.pdf')
+
+	groups = d_groups.values()
+	data = []
+	for i in range(1, len(species)+1):
+		insects, dispens = [], []
+		print i, 
+		for xgroups in comb(groups, i):
+			insect, dispen = insect_groups(xgroups)
+			insects += [len(insect)]
+			dispens += [len(dispen)+len(insect)]
+		print len(insects)
+		data += [ [i] + stats_data(insects) + stats_data(dispens) ]
+	plot_pan(data, outfig='Core-Pan.plot.pdf')
+def _flower_plot(d_groups, outfig):
+	import matplotlib.pyplot as plt
+	from flower_plot import flower_plot
+	from Stairway_plot import create_colors
+	colors = create_colors(len(d_groups)+2)
+	insect,_ = insect_groups(d_groups.values())
+	n_core = len(insect)
+	data = {}
+	for (sp, ids), color in zip(d_groups.items(), colors[2:]):
+		others = [_ids for _sp, _ids in d_groups.items() if _sp != sp]
+		_ins, _dis = insect_groups(others)
+		others = _ins | _dis
+		shell = len(ids & others)
+		unique = len(ids - others)
+#		sp = '$' + sp.replace('_', '~') + '$'
+		data[sp] = dict(color=color, shell=shell, unique=unique)
+		
+	fig, ax = plt.subplots(subplot_kw={'aspect': 'equal'}, figsize=(8, 8), dpi=300)
+	flower_plot(data, n_core=n_core, core_color=colors[0], shell_color=colors[1], alpha=0.3, ax=ax)
+	#plt.tight_layout()
+	plt.savefig(outfig, )
+def plot_pan(data, outfig, alpha=0.2):
+	import matplotlib.pyplot as plt
+	data = np.array(data)
+	x = data[:, 0]
+	cc, cd = ('#1f77b4', '#ff7f0e',) # '#2ca02c', '#d62728')
+	yc, ycL, ycU = data[:, 1], data[:, 2], data[:, 3]
+	yd, ydL, ydU = data[:, 4], data[:, 5], data[:, 6]
+	plt.figure(figsize=(8, 6))
+	plt.plot(x, yc, 'o-', label='Core', color=cc, )
+	plt.fill_between(x, ycL, ycU, color=cc,  alpha=alpha)
+	plt.plot(x, yd, 's-', label='Pan', color=cd, )
+	plt.fill_between(x, ydL, ydU, color=cd,  alpha=alpha)
+	plt.legend(loc='best')
+	plt.xlabel('Genome number')
+	plt.ylabel('Family number')
+	plt.xticks(x, map(int, x))
+	plt.savefig(outfig)
+	
+def stats_data(data):
+	return [np.median(data), np.percentile(data,2.5), np.percentile(data,97.5)]
+
+def comb(groups, N, MAX_COMB=1000):
+	i = 0
+	for xgrp in itertools.combinations(groups, N):
+		yield list(xgrp)
+		i += 1
+		if i > MAX_COMB:
+			break
+
+def insect_groups(groups):
+	for i, ids in enumerate(groups):
+		if i == 0:
+			insect = ids
+			continue
+		insect = insect & ids
+	dispens = set([])
+	for ids in groups:
+		dispens = dispens | (ids - insect)
+	return insect, dispens
+
 def to_astral(ResultsDir, pepSeq, outTrees, species=None, tmpdir='/io/tmp/share', min_singlecopy=0.7):
 	from RunCmdsMP import run_job
 	tmpdir = '{}/to_astral.{}'.format(tmpdir, os.getpid())
@@ -314,7 +400,7 @@ def to_astral(ResultsDir, pepSeq, outTrees, species=None, tmpdir='/io/tmp/share'
 		treefile = alnTrim + '.treefile'
 		cmd = '[ ! -s {} ]'.format(treefile)
 		cmds = [cmd]
-		cmd = 'mafft --auto {} > {} 2> /dev/null'.format(outSeq, alnSeq)
+		cmd = 'mafft --auto {} > {}'.format(outSeq, alnSeq)
 		cmds += [cmd]
 		cmd = 'trimal -automated1 -in {} -out {} &> /dev/null'.format(alnSeq, alnTrim)	# -gt 0.8 (before 2020-2-21)
 		cmds += [cmd]
@@ -410,7 +496,7 @@ def retrieve_allele(ResultsDir, collinearity, gff, fout=sys.stdout, min_block=10
 		blocks += [(rc.score, rc.N, rc.genes1, rc.genes2, rc.chr1, rc.chr2, rc.species1, rc.species2, rc.Alignment)]
 
 	sps = _sps
-	d_chrom = rc.d_chrom    # chrom: [g1,g2,...]
+	d_chrom = rc.d_chrom	# chrom: [g1,g2,...]
 	d_genes = rc.d_gene		# gene.id: gene
 	d_syn = {}
 	blocks = sorted(blocks, reverse=1)
@@ -983,7 +1069,7 @@ specific multi-copy OGs: {}\nspecific multi-copy genes: {}'.format(len(ex_sps), 
 		'''获取alignment的长度'''
 		for rc in SeqIO.parse(alnfile, fmt):
 			return len(rc.seq)
-		
+	
 def count_og(OFdir, species):
 	species = parse_species(species)
 	result = OrthoFinder(OFdir)
@@ -1469,7 +1555,6 @@ data = read.table(setfile, head=T, sep='\t')
 library(UpSetR)
 pdf(outfig, width=10, height=7)
 upset(data, nsets={}, nintersects={},
-      order.by = c("freq", "degree"), decreasing = c(TRUE,TRUE))
 dev.off()
 '''.format(outCountfile, outfig, nsets, nintersects)
 	with open(rfile, 'w') as f:
@@ -2049,6 +2134,12 @@ def main():
 		outTsv = sys.stdout
 		species = sys.argv[3]
 		venn(OFdir, outTsv, species=species)
+	elif subcommand == 'pan':
+		OFdir=sys.argv[2]
+		try: species = sys.argv[3]
+		except IndexError: species = None
+		pan_stats(OFdir, species)
+
 	elif subcommand == 'cn_density':
 		OFdir=sys.argv[2]
 		copy_number_density(OFdir)
@@ -2110,6 +2201,7 @@ def main():
 		OFdir =sys.argv[2]
 		species = sys.argv[3]
 		count_og(OFdir, species)
+
 	else:
 		raise ValueError('Unknown command: {}'.format(subcommand))
 

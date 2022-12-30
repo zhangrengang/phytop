@@ -21,22 +21,34 @@ def makeArgparse():
 		)
 	# input
 	parser.add_argument("astral", metavar='NEWICK',
-					help="Species tree output by ASTRAL (`-u 2` for C++ versions and `-t 2` for JAVA versions) [required]")
-	parser.add_argument('-alter', default=None, type=str, dest='show',  metavar='FILE',
-                    help="Show the tree instead of the ASTRAL tree (their topologies MUST be identical) [default=%(default)s]")
+					help="Species tree output by ASTRAL (using option `-u 2` for C++ versions and `-t 2` for JAVA versions) [required]")
+	parser.add_argument('-alter', default=None, type=str, dest='alter',  metavar='NEWICK',
+                    help="Show the tree (e.g. a timetree) instead of the ASTRAL tree (their topologies MUST be identical) [default=%(default)s]")
 
-	parser.add_argument('-collapse', default=None, type=str, dest='collapsed',  metavar='FILE',
-					help="Collapse leaves as specified in the file [default=%(default)s]")
-	parser.add_argument('-subset', default=None, type=str, nargs='+', dest='subset',  metavar='TAXON',
-                    help="Show a subset clade [default=%(default)s]")
+	# clade operateion
+	parser.add_argument('-clades', default=None, type=str,  dest='clades',  metavar='FILE',
+                    help="Difinition of clades [default=%(default)s]")
+	
+	parser.add_argument('-collapse', default=None, type=str, nargs='+', dest='collapsed',  metavar='CLADE/FILE',
+					help="Collapse clades [default=%(default)s]")
+	parser.add_argument('-onshow', default=None, type=str, nargs='+', dest='onshow',  metavar='NODE/FILE',
+                    help="Only show barcharts on these inner nodes [default=%(default)s]")
+	parser.add_argument('-noshow', default=None, type=str, nargs='+', dest='noshow',  metavar='NODE/FILE',
+                    help="Don't show barcharts on these inner nodes [default=%(default)s]")
+
+
+	parser.add_argument('-subset', default=None, type=str, nargs='+', dest='subset',  metavar='NODE/FILE',
+                    help="Show a subset clade with their MCRA [default=%(default)s]")
 
 	# output
 	parser.add_argument('-pre', '-prefix', default=None, type=str, dest='prefix', metavar='STR',
 					help="Prefix for output [default=%(default)s]")
 	parser.add_argument('-tmp', '-tmpdir', default='tmp', dest='tmpdir', type=str, metavar='DIR',
 					help="Temporary directory [default=%(default)s]")
+
+	# set barcharts
 	parser.add_argument('-sort', action="store_true", default=False, 
-                    help="Sort q1, q2 and q3 [default=%(default)s]")
+                    help="Sort q1, q2 and q3, which will miss the directionality [default=%(default)s]")
 	parser.add_argument('-notext', action="store_true", default=False, 
                     help="Do not draw text on the barcharts [default=%(default)s]")
 

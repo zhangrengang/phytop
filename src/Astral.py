@@ -3,6 +3,7 @@ import re
 import math
 from ete3 import Tree, TreeStyle, AttrFace, NodeStyle, ImgFace
 from scipy.stats import chi2
+from .RunCmdsMP import logger
 
 def convertNHX(inNwk, ):
 	def convert(line):
@@ -24,7 +25,8 @@ def convertNHX(inNwk, ):
 	return ''.join(nwk)
 
 class AstralTree:
-	def __init__(self, astral, show=None, max_pval=0.05, tmpdir='tmp', prefix=None, 
+	def __init__(self, astral, alter=None, max_pval=0.05, tmpdir='tmp', prefix=None, 
+			clades=None, onshow=None, noshow=None,
 			collapsed=None, subset=None, sort=False, notext=False):
 		self.treefile = astral
 		self.treestr = convertNHX(self.treefile)
@@ -32,9 +34,12 @@ class AstralTree:
 		self.max_pval = max_pval
 		self.tmpdir = tmpdir
 		self.prefix = prefix
-		self.collapsed = collapsed	# collapse some clades
-		self.subset = subset	# only show a subset taxa
-		self.show = show	# show another tree
+		self.clades = clades
+		self.onshow = self.lazy_parse_clades(onshow)	# only  show barcharts on some nodes
+		self.noshow = self.lazy_parse_clades(noshow)	# don't show barcharts on some nodes
+		self.collapsed = self.lazy_parse_clades(collapsed)	# collapse some clades
+		self.subset = self.lazy_parse_clades(subset)	# only show a subset taxa
+		self.alter = alter	# show another tree
 		self.sort = sort	# sort q1,q2,q3 or not
 		self.notext = notext # draw text or not
 		if self.prefix is None:
@@ -44,6 +49,16 @@ class AstralTree:
 		if not re.compile(r'f1=\S+f2=\S+f3=\S+').search(self.treestr):
 			raise ValueError('Keys f1, f2 and f3 are not found in {}. \
 Please check...'.format(self.treefile))
+	def lazy_parse_clades(self, args):
+		if not args:
+			return 
+		clades =[]
+		for arg in args:
+			if os.path.exists(arg) and os.path.getsize(arg)>0:
+				clades += [line.strip().split()[0] for line in open(arg)]
+			else:
+				clades += [arg]
+		return clades
 	def merge_trees(self):
 		for node in self.tree.traverse():
 			if node.is_leaf():
@@ -52,30 +67,50 @@ Please check...'.format(self.treefile))
 			try:
 				f1, f2, f3 = node.f1, node.f2, node.f3
 			except AttributeError: continue
-			anc = self.show.get_common_ancestor(leaf_names)
+			anc = self.alter.get_common_ancestor(leaf_names)
 			anc.f1, anc.f2, anc.f3 = f1, f2, f3
-		return self.show
+		return self.alter
 	def number_nodes(self, tree):
 		i = 0
-		f_nodes = open('{}/{}.nodes.tsv'.format(self.tmpdir, self.prefix), 'w')
+		clades_file = '{}/{}.nodes.tsv'.format(self.tmpdir, self.prefix)
+		f_nodes = open(clades_file, 'w')
 		for node in tree.traverse():
-			if node.name:
+			node.show = True
+			if node.is_leaf():
 				continue
 			i += 1
+			if node.name:
+				continue
 			name = 'N{}'.format(i)
 			node.name = name
 			line = [name, ','.join(node.get_leaf_names())]
 			f_nodes.write('\t'.join(line)+'\n')
 		f_nodes.close()
+		return clades_file
+	def mark_show(self, tree, onshow=None, noshow=None):
+		default = False if onshow else True
+		for node in tree.traverse():
+			node.show = default
+			if onshow and node.name in set(onshow):
+				node.show = True
+			elif noshow and node.name in set(noshow):
+				node.show = False
+
 	def process_quartet(self):
 		# check f1, f2, f3
 		self.check()
 		# merge
-		if self.show is not None:
-			self.show = Tree(self.show)
+		if self.alter is not None:
+			self.alter = Tree(self.alter)
 			self.tree = self.merge_trees()
-		# name
-		self.number_nodes(self.tree)
+		# name inner nodes
+		clades_file = self.number_nodes(self.tree)
+		logger.info('Clades info file: `{}`, which can be renamed and edited as input of `-clades`'.format(clades_file))
+		# replace clade names
+		if self.clades:
+			self.name_clades(self.tree, self.clades)
+		if self.onshow or self.noshow:
+			self.mark_show(self.tree, self.onshow, self.noshow)
 		# subset
 		if self.subset:
 			self.subset_tree(self.tree, self.subset)
@@ -84,8 +119,8 @@ Please check...'.format(self.treefile))
 			self.collapse_tree(self.tree, self.collapsed)
 			
 		i = 0
-#		f_nodes = open('{}/{}.nodes.tsv'.format(self.tmpdir, self.prefix), 'w')
-		f_info = open('{}.info.tsv'.format(self.prefix), 'w')
+		info_file = '{}.info.tsv'.format(self.prefix)
+		f_info = open(info_file, 'w')
 		line = ['node', 'n', 'p_value', 'q1', 'q2', 'q3', 'ILS_explain', 'IH_explain', 'ILS_index', 'IH_index']
 		f_info.write('\t'.join(line)+'\n')
 		for node in self.tree.traverse():
@@ -100,6 +135,9 @@ Please check...'.format(self.treefile))
 			except AttributeError: continue
 			f1, f2, f3 = map(float, [f1, f2, f3])
 			n = sum([f1, f2, f3])
+			if n == 0:
+				logger.warn('Zero in node: {}'.format(node.name))
+				continue
 			q1, q2, q3 = f1/n, f2/n, f3/n
 			coalescent_unit = node.dist
 			#eq2 = eq3 = math.exp(-coalescent_unit) / 3	# expected
@@ -141,18 +179,23 @@ Please check...'.format(self.treefile))
 				n, P, ILS_explain, IH_explain, ILS_index, IH_index)
 			outfig = '{}/{}.{}.bar.pdf'.format(self.tmpdir, self.prefix, name)
 			values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, hline=hline, text=text, sort=self.sort, notext=self.notext)
-			
-			face = ImgFace(outfig)
-			#face = faces.SVGFace(outfig)
-#			face = faces.BarChartFace(values, colors=colors, labels=labels, min_value=0, max_value=1, width=100, height=100, label_fsize=2, scale_fsize=2)
-			#faces.add_face_to_node(face, node, column=0)
-			node.add_face(face, column=0, position="branch-right")
+			if node.show:	
+				face = ImgFace(outfig)
+				#face = faces.SVGFace(outfig)
+#				face = faces.BarChartFace(values, colors=colors, labels=labels, min_value=0, max_value=1, width=100, height=100, label_fsize=2, scale_fsize=2)
+				#faces.add_face_to_node(face, node, column=0)
+				node.add_face(face, column=0, position="branch-right")
 			line = [name, n, pval, q1, q2, q3, ILS_explain, IH_explain, ILS_index, IH_index]
 			line = map(str, line)
 			f_info.write('\t'.join(line)+'\n')
 		f_info.close()
+
 		# write tree
-		self.tree.write(format=1, outfile='{}/{}.label.tree'.format(self.tmpdir, self.prefix))
+		labeled_treefile = '{}/{}.label.tree'.format(self.tmpdir, self.prefix)
+		self.tree.write(format=1, outfile=labeled_treefile)
+		logger.info('Labeled tree file: `{}`'.format(labeled_treefile))
+		logger.info('Information file: `{}`'.format(info_file))
+
 		#	node.img_style["size"] = 0
 		ts = TreeStyle()
 		ts.show_leaf_name = False
@@ -174,11 +217,9 @@ Please check...'.format(self.treefile))
 			node.img_style = style
 
 		outfig = self.prefix + '.pdf'
+		logger.info('Final plot: `{}`'.format(outfig))
 		self.tree.render(outfig, w=1000, tree_style=ts, dpi=300)
-	def collapse_tree(self, tree, cfg):
-		global d_collapse
-		d_collapse = {}
-		keep, remove = set(tree.get_leaf_names()), set([])
+	def name_clades(self, tree, cfg):
 		for line in open(cfg):
 			temp = line.strip().split()
 			mcra = temp[0]
@@ -189,12 +230,17 @@ Please check...'.format(self.treefile))
 			else:
 				try: ancestor = tree.get_common_ancestor(leaf_names)
 				except ValueError as e:
+					print >> sys.stderr, e
 					continue
 			ancestor.name = mcra
+
+	def collapse_tree(self, tree, clades):
+		keep, remove = set(tree.get_leaf_names()), set([])
+		for mcra in clades:
+			ancestor = tree&mcra
 			keep.add(mcra)
 			remove = remove | set(ancestor.get_leaf_names())
-#			for leaf in ancestor.get_leaves():
-#				d_collapse[leaf] = mcra
+
 #		print(self.tree.write())
 #		print (self.tree.write(is_leaf_fn=collapsed_leaf))
 #		self.tree = Tree( self.tree.write(is_leaf_fn=collapsed_leaf) )

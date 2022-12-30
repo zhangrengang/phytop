@@ -2,6 +2,7 @@
 import sys, os
 import re
 import copy
+import random
 import numpy as np
 import networkx as nx
 from collections import Counter, OrderedDict
@@ -546,7 +547,7 @@ class SpeciesPair:
 	def __eq__(self, other):
 		try: return self.key == other.key
 		except AttributeError:
-			other = SpeciesPair(other)
+			other = SpeciesPair(*other)
 			return self.key == other.key
 	def __hash__(self):
 		return hash(self.key)
@@ -771,7 +772,7 @@ class ColinearGroups:
 		self.spsd = spsd
 		self.max_ploidy = max(sp_dict.values()+[1])
 		self.prefix = spsd
-		print >>sys.stderr, self.sp_dict
+		#print >>sys.stderr, self.sp_dict
 	@property
 	def groups(self):
 		G = nx.Graph()
@@ -1871,8 +1872,9 @@ class ColinearGroups:
 		print d_matrix
 
 class ToAstral(ColinearGroups):
-	def __init__(self, input, pep, spsd=None, cds=None, tmpdir='tmp', root=None, both=True,
-			ncpu=20, max_taxa_missing=0.5, max_mean_copies=10, singlecopy=False, fast=True):
+	def __init__(self, input, pep, spsd=None, cds=None, tmpdir='tmp', root=None, both=True, suffix=None, 
+			ncpu=50, max_taxa_missing=0.5, max_mean_copies=10, max_copies=5, singlecopy=False, 
+			orthtype='Orthogroups', fast=True):
 		self.input = input
 		self.pep = pep
 		self.cds = cds
@@ -1883,8 +1885,14 @@ class ToAstral(ColinearGroups):
 		self.tmpdir = tmpdir
 		self.max_taxa_missing = max_taxa_missing
 		self.max_mean_copies = max_mean_copies
+		self.max_copies = max_copies
+		if singlecopy:
+			self.max_copies = 1
 		self.singlecopy = singlecopy
 		self.fast = fast
+		self.sp_dict = parse_spsd(spsd, skip=True)
+		self.suffix = suffix
+		self.orthtype = orthtype
 	def lazy_get_groups(self, orthtype='Orthogroups'):
 		species = parse_species(self.spsd)
 		if os.path.isdir(self.input):
@@ -1911,7 +1919,8 @@ class ToAstral(ColinearGroups):
 		mafft_template = 'mafft --auto {} > {} 2> /dev/null'
 		pal2nal_template = 'pal2nal.pl -output fasta {} {} > {}'
 		trimal_template = 'trimal -automated1 -in {} -out {} > /dev/null'
-		iqtree_template = 'iqtree -s {} -bb 1000 -nt 1 {} > /dev/null'
+		iqtree_template = 'iqtree -redo -s {} -bb 1000 -nt 1 {} > /dev/null'
+		reroot_template = 'mv {tree} {tree}.bk && nw_reroot -l {tree}.bk {root} > {tree}'
 		mkdirs(self.tmpdir)
 		d_pep = seq2dict(self.pep)
 		d_cds = seq2dict(self.cds) if self.cds else {}
@@ -1919,32 +1928,36 @@ class ToAstral(ColinearGroups):
 		pepTreefiles, cdsTreefiles = [], []
 		cmd_list = []
 		roots = []
-		for og in self.lazy_get_groups():
+		i = 0
+		for og in self.lazy_get_groups(orthtype=self.orthtype):
 			species = og.species
 			nsp = len(set(species))
-			genes = og.genes
-			if self.singlecopy:
-				d_singlecopy = {genes[0]: sp for sp, genes in og.spdict.items() if len(genes)==1}
-				singlecopy_ratio = 1.0*len(d_singlecopy) / len(self.species)
-				if 1-singlecopy_ratio > self.max_taxa_missing:
-					 continue
-				iters = d_singlecopy.items()
-			else:
-				taxa_missing = 1 - 1.0*nsp / len(self.species)
-				if taxa_missing > self.max_taxa_missing:
-					continue
-				if og.mean_copies > self.max_mean_copies:
-					continue
-				iters = zip(genes, species)
-			iters = list(iters)
+			# compatible with single-copy, low-copy, and limited-copy
+			got_sp = [(sp, genes) for sp, genes in og.spdict.items() if len(genes) <= self.sp_dict.get(sp, self.max_copies) ]
+			taxa_missing = 1 - 1.0*len(got_sp) / len(self.species)
+			
+			if taxa_missing > self.max_taxa_missing:
+				continue
+			if og.mean_copies > self.max_mean_copies:
+				continue
+			random.shuffle(got_sp)
+
+			iters = []
+			for (sp, genes) in got_sp:
+				for g in genes:
+					iters += [(g, sp)]
+
 			if len(iters) < 4:
 				continue
+			i += 1
+			#print [sp for (sp, genes) in got_sp]
+
 			ogid = og.ogid
 			pepSeq = '{}/{}.pep'.format(self.tmpdir, ogid)
 			cdsSeq = '{}/{}.cds'.format(self.tmpdir, ogid)
 			f_pep = open(pepSeq, 'w')
 			f_cds = open(cdsSeq, 'w')
-			root = ''
+			d_root = {}
 			for gene, sp in iters:
 				try: rc = d_pep[gene]
 				except KeyError:
@@ -1957,11 +1970,12 @@ class ToAstral(ColinearGroups):
 					rc = d_cds[gene]
 					rc.id = format_id_for_iqtree(gene)
 					SeqIO.write(rc, f_cds, 'fasta')
-				if sp == self.root:
-					root = rc.id
+				if sp in set(self.root):
+					d_root[sp] = rc.id
 			f_pep.close()
 			f_cds.close()
-
+			
+			root = ' '.join(d_root.values())
 			pepAln = pepSeq + '.aln'
 			cdsAln = cdsSeq + '.aln'
 			pepTrim = pepAln + '.trimal'
@@ -1973,7 +1987,7 @@ class ToAstral(ColinearGroups):
 			cmds = [cmd]
 			cmd = mafft_template.format(pepSeq, pepAln)
 			cmds += [cmd]
-			iqtree_opts0 = ' -o {} '.format(root) if root else ''
+			iqtree_opts0 = '' #' -o {} '.format(root) if root else ''
 			pep = True
 			if self.cds:
 				iqtree_opts = iqtree_opts0 + ' -mset GTR ' if self.fast else iqtree_opts0 
@@ -1983,6 +1997,9 @@ class ToAstral(ColinearGroups):
 				cmds += [cmd]
 				cmd = iqtree_template.format(cdsTrim, iqtree_opts)
 				cmds += [cmd]
+				if root:
+					cmd = reroot_template.format(tree=cdsTreefile, root=root)
+					cmds += [cmd]
 				cdsTreefiles += [cdsTreefile]
 				pep = True if self.both else False
 			if pep:
@@ -1991,21 +2008,28 @@ class ToAstral(ColinearGroups):
 				cmds += [cmd]
 				cmd = iqtree_template.format(pepTrim, iqtree_opts)
 				cmds += [cmd]
+				if root:
+					cmd = reroot_template.format(tree=pepTreefile, root=root)
+					cmds += [cmd]
 				pepTreefiles += [pepTreefile]
 			roots += [root]
 			cmds = ' && '.join(cmds)
 			cmd_list += [cmds]
-		pepTreefiles = [t for _, t in sorted(zip(roots, pepTreefiles), reverse=1)]	# prefer to root
+		pepTreefiles = [t for _, t in sorted(zip(roots, pepTreefiles), reverse=1)]	# prefer to rooted
 		cdsTreefiles = [t for _, t in sorted(zip(roots, cdsTreefiles), reverse=1)]
+		if self.suffix is None:
+			self.suffix = '{}_to_astral'.format(self.source)
+
 		nbin = 10
-		cmd_file = '{}/{}.cmds.list'.format(self.tmpdir, self.source)
+		cmd_file = '{}/{}.cmds.list'.format(self.tmpdir, self.suffix)
 		run_job(cmd_file, cmd_list=cmd_list, tc_tasks=self.ncpu, by_bin=nbin, fail_exit=False)
-		pepGenetrees = 'pep.{}_to_astral.genetrees'.format(self.source)
-		cdsGenetrees = 'cds.{}_to_astral.genetrees'.format(self.source)
+
+		pepGenetrees = 'pep.{}.genetrees'.format(self.suffix)
+		cdsGenetrees = 'cds.{}.genetrees'.format(self.suffix)
 		for treefiles, genetrees in zip([pepTreefiles, cdsTreefiles], [pepGenetrees, cdsGenetrees]):
 			self.cat_genetrees(treefiles, genetrees, idmap=d_idmap, plain=False, format_confidence='%d')
 
-def parse_spsd(spsd):
+def parse_spsd(spsd, skip=False):
 	d = OrderedDict()
 	if spsd is None:
 		return d
@@ -2016,6 +2040,8 @@ def parse_spsd(spsd):
 		try:
 			sp, ploidy = temp[:2]
 		except ValueError:
+			if skip:
+				continue
 			sp = temp[0]
 			ploidy = 1
 		d[sp] = int(ploidy)
