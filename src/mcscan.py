@@ -1699,7 +1699,7 @@ class ColinearGroups:
 			self.cat_genetrees(iqtreefiles, genetrees, idmap=self.d_chroms, plain=False)
 			sptree = genetrees + '.astral'
 			cmd = '''mem=50g
-	astral_root=/io/bin/Astral-MP-5.14.5
+	astral_root=~/bin/Astral-MP-5.14.5
 	java -Xmx$mem -D"java.library.path=$astral_root/lib" -jar $astral_root/astral.*.jar -i {} -o {}'''.format(
 				genetrees, sptree)
 			cmds += [cmd]
@@ -1879,7 +1879,7 @@ class ToAstral(ColinearGroups):
 		self.pep = pep
 		self.cds = cds
 		self.spsd = spsd
-		self.root = root
+		self.root = root.split()
 		self.both = both
 		self.ncpu = ncpu
 		self.tmpdir = tmpdir
@@ -1916,11 +1916,12 @@ class ToAstral(ColinearGroups):
 		self.source = source
 		return groups
 	def run(self):
+		logger.info('VARS: {}'.format(self.__dict__))
 		mafft_template = 'mafft --auto {} > {} 2> /dev/null'
 		pal2nal_template = 'pal2nal.pl -output fasta {} {} > {}'
 		trimal_template = 'trimal -automated1 -in {} -out {} > /dev/null'
 		iqtree_template = 'iqtree -redo -s {} -bb 1000 -nt 1 {} > /dev/null'
-		reroot_template = 'mv {tree} {tree}.bk && nw_reroot -l {tree}.bk {root} > {tree}'
+		reroot_template = 'mv {tree} {tree}.bk && nw_reroot -l {tree}.bk {root} | nw_order -c n - > {tree}'
 		mkdirs(self.tmpdir)
 		d_pep = seq2dict(self.pep)
 		d_cds = seq2dict(self.cds) if self.cds else {}
@@ -1928,7 +1929,7 @@ class ToAstral(ColinearGroups):
 		pepTreefiles, cdsTreefiles = [], []
 		cmd_list = []
 		roots = []
-		i = 0
+		i,j = 0, 0
 		for og in self.lazy_get_groups(orthtype=self.orthtype):
 			species = og.species
 			nsp = len(set(species))
@@ -1975,6 +1976,8 @@ class ToAstral(ColinearGroups):
 			f_pep.close()
 			f_cds.close()
 			
+			if d_root:
+				j += 1
 			root = ' '.join(d_root.values())
 			pepAln = pepSeq + '.aln'
 			cdsAln = cdsSeq + '.aln'
@@ -1982,7 +1985,7 @@ class ToAstral(ColinearGroups):
 			cdsTrim = cdsAln + '.trimal'
 			pepTreefile = pepTrim + '.treefile'
 			cdsTreefile = cdsTrim + '.treefile'
-			treefile = cdsTreefile if self.cds else pepTreefile
+			treefile = cdsTreefile if self.cds and not self.both else pepTreefile
 			cmd = '[ ! -s {} ]'.format(treefile)
 			cmds = [cmd]
 			cmd = mafft_template.format(pepSeq, pepAln)
@@ -2015,7 +2018,10 @@ class ToAstral(ColinearGroups):
 			roots += [root]
 			cmds = ' && '.join(cmds)
 			cmd_list += [cmds]
+		logger.info('total {} groups, {} rooted'.format(i,j))
 		pepTreefiles = [t for _, t in sorted(zip(roots, pepTreefiles), reverse=1)]	# prefer to rooted
+		with open('/tmp/sort.tree', 'w') as f:
+			print >> f, pepTreefiles
 		cdsTreefiles = [t for _, t in sorted(zip(roots, cdsTreefiles), reverse=1)]
 		if self.suffix is None:
 			self.suffix = '{}_to_astral'.format(self.source)

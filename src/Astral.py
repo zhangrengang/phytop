@@ -1,9 +1,87 @@
 import sys, os
 import re
 import math
+import itertools
+import numpy as np
+from collections import OrderedDict
 from ete3 import Tree, TreeStyle, AttrFace, NodeStyle, ImgFace
 from scipy.stats import chi2
 from .RunCmdsMP import logger
+from .small_tools import mk_ckp, check_ckp
+
+class BL:
+	def __init__(self, species_tree, gene_trees):
+		self.species_tree = species_tree	# Tree object, labeled
+		self.gene_trees = gene_trees	# treefile path
+	def run(self):
+		d_quartet =self.tree2quartet(self.species_tree)
+	#	print(d_quartet)
+		return self.get_BL(self.gene_trees, d_quartet)
+	def tree2quartet(self, tree):
+		leaf_names = tree.get_leaf_names()
+		d_quartet = OrderedDict()
+		i = 0
+		for node in tree.traverse():
+			if node.is_leaf() or node.is_root():
+				continue
+			i += 1
+			if not node.name:
+				node.name = 'N{}'.format(i)
+
+			sisters = node.get_sisters()
+			assert len(sisters) == 1, 'not bifurcating with more than one sisters: {}'.format(node)
+			sister = sisters[0]
+			if sister.is_root():
+				continue
+			children = node.get_children()
+			assert len(children) == 2, 'not bifurcating with more than two children: {}'.format(node)
+			child1, child2 = children
+			sister_names = sister.get_leaf_names()
+			child1_names = child1.get_leaf_names()
+			child2_names = child2.get_leaf_names()
+			outgroup_names = set(leaf_names) - set(sister_names) - set(child1_names) - set(child2_names)
+			outgroup_names = list(outgroup_names)
+			if not outgroup_names:
+				continue
+			if node.name in d_quartet:
+				raise ValueError('non-unique node name: {}'.format(node.name))
+			d_quartet[node.name] = [outgroup_names, sister_names, child1_names, child2_names] # O,S,L,R
+		return d_quartet
+	def get_BL(self, gene_trees, d_quartet, cutoff=0.8):
+		qs = ['q1', 'q2', 'q3']
+		d_qdist = {}
+		j = 0
+		for line in open(gene_trees):
+			gtree = Tree(line)
+			for name, quartet in d_quartet.items():
+				if name not in d_qdist:
+					d_qdist[name] = {q:[] for q in qs}
+				d_dist = {q:[] for q in qs}
+				i = 0
+#				print(name, quartet)
+				for to, ts, tl, tr in itertools.product(*quartet):
+					j += 1
+					qtree = gtree.copy('newick')
+					try: qtree.prune([to, ts, tl, tr], preserve_branch_length=True)
+					except ValueError: continue	# node not found
+					qtree.set_outgroup(to)
+					qtree.prune([ts, tl, tr], preserve_branch_length=True)
+					anc = qtree.get_common_ancestor(qtree.get_leaves())
+					d_map = dict(zip([ts, tr, tl], qs))
+					for child in anc.get_children():
+						if child.is_leaf():
+							tn = d_map[child.name]
+						else:
+							dist = child.get_distance(anc)
+					i += 1
+					d_dist[tn] += [dist]
+				max_q, dists = max(d_dist.items(), key=lambda x: len(x[1]))
+				if 1.0*len(dists) < cutoff:
+					continue
+				dist = np.mean(dists)
+				d_qdist[name][max_q] += [dist]
+		logger.info('processed {} times'.format(j))
+		return d_qdist
 
 def convertNHX(inNwk, ):
 	def convert(line):
@@ -25,9 +103,11 @@ def convertNHX(inNwk, ):
 	return ''.join(nwk)
 
 class AstralTree:
-	def __init__(self, astral, alter=None, max_pval=0.05, tmpdir='tmp', prefix=None, 
+	def __init__(self, astral, alter=None, genetrees=None, 
+			max_pval=0.05, tmpdir='tmp', prefix=None, both_plot=True,
 			clades=None, onshow=None, noshow=None,
-			collapsed=None, subset=None, sort=False, notext=False):
+			collapsed=None, subset=None, sort=False, notext=False,
+			figsize=3, fontsize=14):
 		self.treefile = astral
 		self.treestr = convertNHX(self.treefile)
 		self.tree = Tree(self.treestr)
@@ -40,8 +120,12 @@ class AstralTree:
 		self.collapsed = self.lazy_parse_clades(collapsed)	# collapse some clades
 		self.subset = self.lazy_parse_clades(subset)	# only show a subset taxa
 		self.alter = alter	# show another tree
+		self.genetrees = genetrees	# branch lengths
 		self.sort = sort	# sort q1,q2,q3 or not
 		self.notext = notext # draw text or not
+		self.figsize = figsize	# barcharts
+		self.fontsize = fontsize	# barcharts
+		self.both_plot = both_plot # plot both histogram and barcharts
 		if self.prefix is None:
 			self.prefix = os.path.basename(self.treefile)
 		
@@ -106,6 +190,16 @@ Please check...'.format(self.treefile))
 		# name inner nodes
 		clades_file = self.number_nodes(self.tree)
 		logger.info('Clades info file: `{}`, which can be renamed and edited as input of `-clades`'.format(clades_file))
+		
+		# load genetrees
+		if self.genetrees:
+			ckpfile = '{}/{}.genetrees.dists'.format(self.tmpdir, self.prefix)
+			data = check_ckp(ckpfile)
+			if data:
+				d_dist, = data
+			else:
+				d_dist = BL(self.tree, self.genetrees).run()
+				mk_ckp(ckpfile, d_dist)
 		# replace clade names
 		if self.clades:
 			self.name_clades(self.tree, self.clades)
@@ -177,8 +271,19 @@ Please check...'.format(self.treefile))
 			P = Pfmt.format(pval)
 			text = '$n$={:.0f}\n$P$={}\nILS-e={:.1%}\nIH-e={:.1%}\nILS-i={:.1%}\nIH-i={:.1%}'.format(
 				n, P, ILS_explain, IH_explain, ILS_index, IH_index)
-			outfig = '{}/{}.{}.bar.pdf'.format(self.tmpdir, self.prefix, name)
-			values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, hline=hline, text=text, sort=self.sort, notext=self.notext)
+
+			kargs = dict(hline=hline, text=text,
+                    sort=self.sort, notext=self.notext, figsize=self.figsize, fontsize=self.fontsize)
+			if self.both_plot and self.genetrees:
+				outfig = '{}/{}.{}.both.pdf'.format(self.tmpdir, self.prefix, name)
+				joint_plot(bardata=[q1, q2, q3], histdata=d_dist[node.name], outfig=outfig, **kargs)
+			else:
+				outfig = '{}/{}.{}.bar.pdf'.format(self.tmpdir, self.prefix, name)
+				values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, **kargs)
+					#hline=hline, text=text, 
+					#sort=self.sort, notext=self.notext, figsize=self.figsize, fontsize=self.fontsize)
+		#	outfig = '{}/{}.{}.dist.pdf'.format(self.tmpdir, self.prefix, name)
+		#	plot_dist(data=d_dist[node.name], outfig=outfig, figsize=self.figsize,)
 			if node.show:	
 				face = ImgFace(outfig)
 				#face = faces.SVGFace(outfig)
@@ -258,27 +363,75 @@ def collapsed_leaf(node):
 
 
 colors = ('#1f77b4', '#ff7f0e', '#2ca02c', '#d62728')
-def plot_bar(qs=[1,0,0], outfig=None, hline=None, ymax=1, text=None, sort=False, notext=False):
+def joint_plot(bardata, histdata, outfig=None, figsize=3, **kargs):
+	from matplotlib import gridspec
+	import matplotlib.pyplot as plt
+	gs = gridspec.GridSpec(3, 2)
+	fig = plt.figure(figsize=(figsize, figsize))
+#	axs = []
+	ax1 = fig.add_subplot(gs[0, 0])
+	ax2 = fig.add_subplot(gs[1, 0], sharex=ax1, sharey=ax1)
+	ax3 = fig.add_subplot(gs[2, 0], sharex=ax1, sharey=ax1)
+	axs = [ax1, ax2, ax3]
+#	for i in range(3):
+#		fig.add_subplot(gs[i, 0], sharex='all', sharey='all')
+	fig.subplots_adjust(hspace=0)
+	ax = fig.add_subplot(gs[:, 1])
+#	axs = [fig.add_subplot(gs[i, 0]) for i in range(3)]
+	kargs['fontsize'] /= 2
+	plot_dist(histdata, axs=axs, **kargs)
+	plot_bar(bardata, ax=ax, **kargs)
+	plt.savefig(outfig, bbox_inches='tight', transparent=True, dpi=600)
+	plt.close()
+
+def plot_bar(qs=[1,0,0], outfig=None, ax=None, hline=None, ymax=1, text=None, sort=False, notext=False,
+		figsize=3, fontsize=14, **kargs):
 	import matplotlib.pyplot as plt
 	import matplotlib
 	matplotlib.rcParams['ytick.minor.visible'] = True
 	if sort:
 		qs = list(sorted(qs, reverse=1))
-	plt.figure(figsize=(3,3))
+	if ax is None:
+		fig, ax = plt.subplots(figsize=(figsize, figsize))
+#	plt.figure(figsize=(figsize, figsize))
 	x = list(range(len(qs)))
 	labs = ['q{}'.format(v+1) for v in x]
 	cs = colors[:len(qs)]
 	print(x, qs, hline)
-	plt.bar(x, qs, color=cs, tick_label=labs, align='center', width=0.67)
+	ax.bar(x, qs, color=cs, tick_label=labs, align='center', width=0.67)
 	if hline is not None:
-		plt.axhline(y=hline, color='gray', ls='--')
+		ax.axhline(y=hline, color='gray', ls='--')
 	if text is not None and not notext:
-		plt.text(0.3*max(x), 0.98*ymax, text, fontsize=14,
+		ax.text(0.3*max(x), 0.98*ymax, text, fontsize=fontsize,
 				horizontalalignment='left', verticalalignment='top')
-	plt.ylim(0, ymax)
-	plt.savefig(outfig, bbox_inches='tight', transparent=True, dpi=600)
-	plt.close()
+	ax.set_ylim(0, ymax)
+	if outfig is not None:
+		plt.savefig(outfig, bbox_inches='tight', transparent=True, dpi=600)
+		plt.close()
 	return qs, labs, cs
+def plot_dist(data, axs=None, outfig=None, figsize=3, bins=30, limit=97.5, **kargs):
+	import matplotlib.pyplot as plt
+#	import seaborn as sns
+#	plt.figure(figsize=(figsize, figsize))
+	if axs is None:
+		fig, axs = plt.subplots(3, 1, sharex='all', sharey='all', figsize=(figsize, figsize))
+		fig.subplots_adjust(hspace=0)
+	full = []
+	for vals in data.values():
+		full += vals
+	xlim = np.percentile(full, limit)
+	
+	for key, ax, color in zip(['q1', 'q2', 'q3'], axs, colors):
+		#full += data[key]
+		#sns.displot(data[key], color=color, ax=ax)
+		#sns.histplot(data[key], color=color, ax=ax)
+		ax.hist(data[key], color=color, range=(0,xlim), bins=bins)
+#		ax.set_ylabel('')
+		ax.set_xlim(0, xlim)
+	if outfig is not None:
+		plt.savefig(outfig, bbox_inches='tight', transparent=True, dpi=600)
+		plt.close()
+
 def main():
 #	print(convertNHX(sys.argv[1]))
 	AstralTree(sys.argv[1]).process_quartet()

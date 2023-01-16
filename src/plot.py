@@ -24,6 +24,8 @@ def makeArgparse():
 					help="Species tree output by ASTRAL (using option `-u 2` for C++ versions and `-t 2` for JAVA versions) [required]")
 	parser.add_argument('-alter', default=None, type=str, dest='alter',  metavar='NEWICK',
                     help="Show the tree (e.g. a timetree) instead of the ASTRAL tree (their topologies MUST be identical) [default=%(default)s]")
+	parser.add_argument('-g', '-genetrees', default=None, type=str, dest='genetrees',  metavar='NEWICK',
+                    help="gene trees for branch lengths [default=%(default)s]")
 
 	# clade operateion
 	parser.add_argument('-clades', default=None, type=str,  dest='clades',  metavar='FILE',
@@ -51,6 +53,10 @@ def makeArgparse():
                     help="Sort q1, q2 and q3, which will miss the directionality [default=%(default)s]")
 	parser.add_argument('-notext', action="store_true", default=False, 
                     help="Do not draw text on the barcharts [default=%(default)s]")
+	parser.add_argument('-figsize', default=3, type=float, 
+					help="Figure size of barcharts [default=%(default)s]")
+	parser.add_argument('-fontsize', default=14, type=float,
+                    help="Font size of text in barcharts [default=%(default)s]")
 
 	args = parser.parse_args()
 	return args
