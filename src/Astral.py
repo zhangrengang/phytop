@@ -5,8 +5,9 @@ import itertools
 import numpy as np
 from collections import OrderedDict
 from ete3 import Tree, TreeStyle, AttrFace, NodeStyle, ImgFace
+from ete3.coretype.tree import TreeError
 from scipy.stats import chi2
-from .RunCmdsMP import logger
+from .RunCmdsMP import logger, run_cmd
 from .small_tools import mk_ckp, check_ckp
 
 class BL:
@@ -107,6 +108,7 @@ class AstralTree:
 			max_pval=0.05, tmpdir='tmp', prefix=None, both_plot=True,
 			clades=None, onshow=None, noshow=None,
 			collapsed=None, subset=None, sort=False, notext=False,
+			test_clades=None, astral_bin='astral-pro', outgroup=None,
 			figsize=3, fontsize=14):
 		self.treefile = astral
 		self.treestr = convertNHX(self.treefile)
@@ -114,11 +116,16 @@ class AstralTree:
 		self.max_pval = max_pval
 		self.tmpdir = tmpdir
 		self.prefix = prefix
-		self.clades = clades
+		self.clades = self.parse_clades(clades)
 		self.onshow = self.lazy_parse_clades(onshow)	# only  show barcharts on some nodes
 		self.noshow = self.lazy_parse_clades(noshow)	# don't show barcharts on some nodes
 		self.collapsed = self.lazy_parse_clades(collapsed)	# collapse some clades
+		if collapsed == []:
+			self.collapsed = self.clades.keys()
 		self.subset = self.lazy_parse_clades(subset)	# only show a subset taxa
+		self.test_clades = self.lazy_parse_clades(test_clades) # test four-taxons
+		self.astral_bin = astral_bin
+		self.outgroup = outgroup
 		self.alter = alter	# show another tree
 		self.genetrees = genetrees	# branch lengths
 		self.sort = sort	# sort q1,q2,q3 or not
@@ -179,7 +186,46 @@ Please check...'.format(self.treefile))
 				node.show = True
 			elif noshow and node.name in set(noshow):
 				node.show = False
+	def get_leaf_names(self, tree, nodes, d_map):
+		names = set([])
+		for name in nodes:
+			try:
+		#		print(name, d_map[name]) 
+				names = names | set(d_map[name])
+			except KeyError:
+				try: ancestor = tree&name
+				except TreeError as e: raise TreeError('{} {}'.format(name, e))
+				names = names | set(ancestor.get_leaf_names())
+		return names
+	def test(self):
+		self.alter = None
+		prefix0 = self.prefix
+		d_map = self.name_clades(self.tree, self.clades) if self.clades else {}
+		tree0 = self.tree
 
+		outgroup = self.test_clades[0]
+		ingroups = self.test_clades[1:]
+		for ingroup3 in itertools.combinations(ingroups, 3):
+			ingroup3 = list(ingroup3)
+			subset_leaf_names = self.get_leaf_names(tree0, [outgroup] + ingroup3, d_map)
+			self.prefix = '{}.{}'.format(prefix0, '-'.join(ingroup3))
+			genetrees = '{}/{}.genetrees'.format(self.tmpdir, self.prefix)
+			sptree = genetrees + '.astral'
+			cmd = 'nw_prune {genetrees0} {leaves} -v > {genetrees} && {astral_bin} -i {genetrees} -u 2 -t 4 -o {sptree}'.format(
+					genetrees0=self.genetrees, leaves=' '.join(subset_leaf_names), genetrees=genetrees,
+					astral_bin=self.astral_bin, sptree=sptree)
+			run_cmd(cmd, log=True)
+			self.tree = Tree(convertNHX(sptree))
+			self.process_quartet()
+	def run(self):
+		if self.test_clades is not None:
+			if self.test_clades == []:
+				self.test_clades = self.clades.keys()
+			if self.outgroup:
+				self.test_clades = [self.outgroup] + [c for c in self.test_clades if c != self.outgroup]
+			self.test()
+		else:
+			self.process_quartet()
 	def process_quartet(self):
 		# check f1, f2, f3
 		self.check()
@@ -192,7 +238,7 @@ Please check...'.format(self.treefile))
 		logger.info('Clades info file: `{}`, which can be renamed and edited as input of `-clades`'.format(clades_file))
 		
 		# load genetrees
-		if self.genetrees:
+		if self.genetrees and not self.test_clades:
 			ckpfile = '{}/{}.genetrees.dists'.format(self.tmpdir, self.prefix)
 			data = check_ckp(ckpfile)
 			if data:
@@ -273,8 +319,8 @@ Please check...'.format(self.treefile))
 				n, P, ILS_explain, IH_explain, ILS_index, IH_index)
 
 			kargs = dict(hline=hline, text=text,
-                    sort=self.sort, notext=self.notext, figsize=self.figsize, fontsize=self.fontsize)
-			if self.both_plot and self.genetrees:
+					sort=self.sort, notext=self.notext, figsize=self.figsize, fontsize=self.fontsize)
+			if self.both_plot and self.genetrees and not self.test_clades:
 				outfig = '{}/{}.{}.both.pdf'.format(self.tmpdir, self.prefix, name)
 				joint_plot(bardata=[q1, q2, q3], histdata=d_dist[node.name], outfig=outfig, **kargs)
 			else:
@@ -324,27 +370,51 @@ Please check...'.format(self.treefile))
 		outfig = self.prefix + '.pdf'
 		logger.info('Final plot: `{}`'.format(outfig))
 		self.tree.render(outfig, w=1000, tree_style=ts, dpi=300)
-	def name_clades(self, tree, cfg):
+	def parse_clades(self, cfg):
+		d_clades = OrderedDict()
+		if not cfg:
+			return d_clades
+
 		for line in open(cfg):
 			temp = line.strip().split()
 			mcra = temp[0]
 			leaf_names = temp[1].split(',')
-			if len(leaf_names) == 1:
-				leaf_name = leaf_names[0]
-				ancestor = tree&leaf_name
-			else:
-				try: ancestor = tree.get_common_ancestor(leaf_names)
-				except ValueError as e:
-					print >> sys.stderr, e
-					continue
-			ancestor.name = mcra
+			if mcra in d_clades and leaf_names != d_clades[mcra]:
+				logger.error('Conflict clade `{}`: {} vs {}.'.format(mcra, leaf_names, d_clades[mcra]))
+			d_clades[mcra] = leaf_names
+		return d_clades
+	def name_clades(self, tree, d_clades):
+		d_map = {}
+		for mcra, leaf_names in d_clades.items():
+			try: leaf_names = self.name_clade(tree, mcra, leaf_names)
+			except UnboundLocalError: continue
+			d_map[mcra] = leaf_names
+		return d_map
+	def name_clade(self, tree, mcra, leaf_names):
+		if len(leaf_names) == 1:
+			leaf_name = leaf_names[0]
+			try: ancestor = tree&leaf_name
+			except TreeError as e: pass
+#				logger.warn(leaf_name, e)
+		else:
+			try: ancestor = tree.get_common_ancestor(leaf_names)
+			except ValueError as e: pass
+		#		logger.error(leaf_names, e)
+		leaf_names = ancestor.get_leaf_names()		
+		ancestor.name = mcra
+		return leaf_names
 
 	def collapse_tree(self, tree, clades):
 		keep, remove = set(tree.get_leaf_names()), set([])
 		for mcra in clades:
-			ancestor = tree&mcra
+			try: ancestor = tree&mcra
+			except TreeError as e: #continue # cannot find
+				#logger.warn(mcra, e)
+				continue
 			keep.add(mcra)
-			remove = remove | set(ancestor.get_leaf_names())
+			leaf_names = ancestor.get_leaf_names()
+			if len(leaf_names) > 1:
+				remove = remove | set(leaf_names)
 
 #		print(self.tree.write())
 #		print (self.tree.write(is_leaf_fn=collapsed_leaf))
@@ -434,7 +504,7 @@ def plot_dist(data, axs=None, outfig=None, figsize=3, bins=30, limit=97.5, **kar
 
 def main():
 #	print(convertNHX(sys.argv[1]))
-	AstralTree(sys.argv[1]).process_quartet()
+	AstralTree(sys.argv[1]).run()
 
 if __name__ == '__main__':
 	main()

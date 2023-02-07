@@ -30,17 +30,25 @@ def makeArgparse():
 	# clade operateion
 	parser.add_argument('-clades', default=None, type=str,  dest='clades',  metavar='FILE',
                     help="Difinition of clades [default=%(default)s]")
-	
-	parser.add_argument('-collapse', default=None, type=str, nargs='+', dest='collapsed',  metavar='CLADE/FILE',
+
+	parser.add_argument('-collapse', default=None, type=str, nargs='*', dest='collapsed',  metavar='TAXON/FILE',
 					help="Collapse clades [default=%(default)s]")
-	parser.add_argument('-onshow', default=None, type=str, nargs='+', dest='onshow',  metavar='NODE/FILE',
+	parser.add_argument('-onshow', default=None, type=str, nargs='+', dest='onshow',  metavar='TAXON/FILE',
                     help="Only show barcharts on these inner nodes [default=%(default)s]")
-	parser.add_argument('-noshow', default=None, type=str, nargs='+', dest='noshow',  metavar='NODE/FILE',
+	parser.add_argument('-noshow', default=None, type=str, nargs='+', dest='noshow',  metavar='TAXON/FILE',
                     help="Don't show barcharts on these inner nodes [default=%(default)s]")
 
 
-	parser.add_argument('-subset', default=None, type=str, nargs='+', dest='subset',  metavar='NODE/FILE',
+	parser.add_argument('-subset', default=None, type=str, nargs='+', dest='subset',  metavar='TAXON/FILE',
                     help="Show a subset clade with their MCRA [default=%(default)s]")
+
+	# test
+	parser.add_argument('-test', default=None, type=str,  nargs='*', dest='test_clades',  metavar='TAXON/FILE',
+                    help="Test four-taxon (the first is outgroup and others are sampled for three ingroups) [default=%(default)s]")
+	parser.add_argument('-astral_bin', default=None, type=str,  metavar='STR',
+                    help="ASTRAL command ('astral-pro', 'astral-hybrid', ...) [default=%(default)s]")
+	parser.add_argument('-outgroup', default=None, type=str, metavar='STR',
+                    help="Outgroup [default: the first of `-test`]")
 
 	# output
 	parser.add_argument('-pre', '-prefix', default=None, type=str, dest='prefix', metavar='STR',
@@ -63,7 +71,7 @@ def makeArgparse():
 
 def plot(**kargs):
 	mkdirs(kargs['tmpdir'])
-	AstralTree(**kargs).process_quartet()
+	AstralTree(**kargs).run()
 def main():
 	args = makeArgparse()
 	logger.info('Command: {}'.format(' '.join(sys.argv)))
