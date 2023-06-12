@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from Centromics.__version__ import version
+from src.__version__ import version
 
 from setuptools import setup, find_packages
 from distutils.extension import Extension
@@ -10,10 +10,10 @@ with open('README.md') as f:
 
 
 setup(
-    name='Centromics',
+    name='PhyTop',
     version=version,
-    description='Centromics: visualing centromeres with omics data',
-    url='https://github.com/zhangrengang/Centromics/',
+    description='PhyTop: visualing species tree from ASTRAL',
+    url='https://github.com/zhangrengang/phytop/',
     author='Zhang, Ren-Gang and Wang, Zhao-Xuan',
     license='GPL-3.0',
 
@@ -22,7 +22,7 @@ setup(
     include_package_data=True,
     scripts=[],
     entry_points={
-        'console_scripts': ['centromics = Centromics.pipe:main',
+        'console_scripts': ['phytop = src.plot:main',
         ],
     },
 )
