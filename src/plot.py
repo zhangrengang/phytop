@@ -45,7 +45,7 @@ def makeArgparse():
 	# test
 	parser.add_argument('-test', default=None, type=str,  nargs='*', dest='test_clades',  metavar='TAXON/FILE',
                     help="Test four-taxon (the first is outgroup and others are sampled for three ingroups) [default=%(default)s]")
-	parser.add_argument('-astral_bin', default=None, type=str,  metavar='STR',
+	parser.add_argument('-astral_bin', default='astral-pro', type=str,  metavar='STR',
                     help="ASTRAL command ('astral-pro', 'astral-hybrid', ...) [default=%(default)s]")
 	parser.add_argument('-outgroup', default=None, type=str, metavar='STR',
                     help="Outgroup [default: the first of `-test`]")
@@ -63,8 +63,14 @@ def makeArgparse():
                     help="Do not draw text on the barcharts [default=%(default)s]")
 	parser.add_argument('-figsize', default=3, type=float, 
 					help="Figure size of barcharts [default=%(default)s]")
-	parser.add_argument('-fontsize', default=14, type=float,
+	parser.add_argument('-fontsize', default=13, type=float,
                     help="Font size of text in barcharts [default=%(default)s]")
+
+	# pie
+	parser.add_argument('-pie', '-pie_chart', action="store_true", default=False, dest='pie',
+                    help="Use piechart instead of barchart [default=%(default)s]")
+	parser.add_argument('-cp', '-concordance_percent', action="store_true", default=False,
+                    help="Show gene-species trees concordance percent at inner nodes instead of PP [default=%(default)s]")
 
 	args = parser.parse_args()
 	return args

@@ -279,12 +279,13 @@ def pan_stats(OFdir, species):
 	result = OrthoFinder(OFdir)
 	species = parse_species(species, result)
 	d_groups = {}
-	for group in result.get_orthogroups(species):
+#	for group in result.get_orthogroups(species):
+	for group in result.get_mcl_orthogroups(species):
 		ogid = group.ogid
 		for sp in set(group.species):
 			try: d_groups[sp].add(ogid)
 			except KeyError: d_groups[sp] = {ogid}
-	d_groups = OrderedDict((sp, d_groups[sp]) for sp in species])
+	d_groups = OrderedDict([(sp, d_groups[sp]) for sp in species])
 	_flower_plot(d_groups, outfig='Flower.plot.pdf')
 
 	groups = d_groups.values()
@@ -306,7 +307,7 @@ def _flower_plot(d_groups, outfig):
 	colors = create_colors(len(d_groups)+2)
 	insect,_ = insect_groups(d_groups.values())
 	n_core = len(insect)
-	data = {}
+	data = OrderedDict()
 	for (sp, ids), color in zip(d_groups.items(), colors[2:]):
 		others = [_ids for _sp, _ids in d_groups.items() if _sp != sp]
 		_ins, _dis = insect_groups(others)
@@ -316,7 +317,7 @@ def _flower_plot(d_groups, outfig):
 #		sp = '$' + sp.replace('_', '~') + '$'
 		data[sp] = dict(color=color, shell=shell, unique=unique)
 		
-	fig, ax = plt.subplots(subplot_kw={'aspect': 'equal'}, figsize=(8, 8), dpi=300)
+	fig, ax = plt.subplots(subplot_kw={'aspect': 'equal'}, figsize=(9, 9), dpi=300)
 	flower_plot(data, n_core=n_core, core_color=colors[0], shell_color=colors[1], alpha=0.3, ax=ax)
 	#plt.tight_layout()
 	plt.savefig(outfig, )
@@ -398,7 +399,7 @@ def to_astral(ResultsDir, pepSeq, outTrees, species=None, tmpdir='/io/tmp/share'
 		alnSeq = outSeq + '.aln'
 		alnTrim = alnSeq + '.trimal'
 		treefile = alnTrim + '.treefile'
-		cmd = '[ ! -s {} ]'.format(treefile)
+		cmd = '. ~/.bashrc; [ ! -s {} ]'.format(treefile)
 		cmds = [cmd]
 		cmd = 'mafft --auto {} > {}'.format(outSeq, alnSeq)
 		cmds += [cmd]
@@ -634,6 +635,10 @@ class OrthoFinder:
 			genes = list(group.get_group(sps=sps))
 			#print genes
 			yield OrthoMCLGroupRecord(ogid=group.ogid, genes=genes)
+	def get_mcl_orthogroups(self, sps=None):
+		for group in OrthoMCLGroup(self.MCLOrthogroups):
+			genes = list(group.get_group(sps=sps))
+			yield OrthoMCLGroupRecord(ogid=group.ogid, genes=genes)
 	@property
 	def OGDict(self):
 		'''gene id -> OG id的字典'''
@@ -728,10 +733,26 @@ class OrthoFinder:
 				d_seqs[rc.id] = rc
 		return d_seqs
 	def get_Blast(self, sps=None, fout=sys.stdout):
-		for temp in self.get_blast(sps=sps):
+		for _,_,temp in self.get_blast(sps=sps):
 			print >> fout, '\t'.join(temp)
+	def to_wgdi(self, sps=None, outdir='wgdi', split=True):
+		d_handle = {}
+		for sp1, sp2, temp in self.get_blast(sps=sps):
+			if (sp1, sp2) in d_handle:
+				pass
+			else:
+				out = '{}/{}-{}.blast'.format(outdir, sp1, sp2) if split else '{}/{}.blast'.format(outdir, 'all')
+				if not split and d_handle:
+					d_handle[(sp1, sp2)] = d_handle.values()[0]
+				else:
+					d_handle[(sp1, sp2)] = open(out, 'w')
+			handle = d_handle[(sp1, sp2)]
+			print >> handle , '\t'.join(temp)
+		for handle in d_handle.values():
+			handle.close()
 
 	def get_blast(self, sps=None):
+		d_sp0 = self.SpeciesIDdict
 		d_sp = self.reverse_SpeciesIDdict
 		d_seq = self.SequenceIDdict
 		if sps is None:
@@ -745,7 +766,7 @@ class OrthoFinder:
 				temp = line.strip().split('\t')
 				temp[0] = d_seq[temp[0]]
 				temp[1] = d_seq[temp[1]]
-				yield temp
+				yield d_sp0[sp1], d_sp0[sp2], temp
 	@property
 	def SpeciesIDdict(self):
 		'''物种新编id和名称的映射关系'''
@@ -912,12 +933,20 @@ specific multi-copy OGs: {}\nspecific multi-copy genes: {}'.format(len(ex_sps), 
 						continue
 					para_pairs.add( (g1, g2) )
 		return para_pairs
-	def get_paralogs2(self, sp=None, byName=True):
+	def get_paralogs2(self, sps=None, sp=None, byName=True):
 		'''由Orthologues/获取paralogs'''
 		if sp is not None:
 			if not byName:
 				sp, = self.spId2Name(sp)
 			orthoFiles = glob.glob('{}/Orthologues/*{}*.tsv'.format(self.ResultsDir, sp))
+		elif sps is not None:
+			orthoFiles = []
+			for sp in sps:
+				for sp1, sp2 in itertools.permutations(sps, 2):
+					if not byName:
+						sp1,sp2 = self.spId2Name(sp)
+#				orthoFiles += glob.glob('{}/Orthologues/*{}*.tsv'.format(self.ResultsDir, sp))
+					orthoFiles += ['{}/Orthologues/Orthologues_{}/{}__v__{}.tsv'.format(self.ResultsDir, sp1, sp1, sp2)]
 		else:
 			orthoFiles = self.Orthologues
 		para_pairs = set([])
@@ -1115,7 +1144,10 @@ def single_copy_cds_align2(OFdir, pepSeqs, cdsSeqs, outALN, species=None, single
 			rc = d_pep[gene]
 			rc.id, g = gene_format_common(gene)	# pep id	-> taxon
 			SeqIO.write(rc, f1, 'fasta')
-			rc = d_cds[gene]
+			try: rc = d_cds[gene]
+			except KeyError as e:
+				print >> sys.stderr, e
+				continue
 			rc.id, g = gene_format_common(gene)	# cds
 			SeqIO.write(rc, f2, 'fasta')
 		f1.close()
@@ -1123,7 +1155,7 @@ def single_copy_cds_align2(OFdir, pepSeqs, cdsSeqs, outALN, species=None, single
 		
 		cmds = []
 		alnPep = outPep + '.aln'
-		cmd = 'mafft --auto {} > {} 2> /dev/null'.format(outPep, alnPep)
+		cmd = '. ~/.bashrc; mafft --auto {} > {} '.format(outPep, alnPep)
 		cmds += [cmd]
 		alnPepTrim = alnPep  + '.trimal'
 		cmd = 'trimal -in {} -out {} -gt 0.8'.format(alnPep, alnPepTrim)
@@ -2201,7 +2233,12 @@ def main():
 		OFdir =sys.argv[2]
 		species = sys.argv[3]
 		count_og(OFdir, species)
-
+	elif subcommand == 'to_wgdi':
+		try: OFdir =sys.argv[2]
+		except IndexError: OFdir='OrthoFinder/OrthoFinder/Results_*/'
+		try: species = sys.argv[3]
+		except IndexError: species=None
+		OrthoFinder(OFdir).to_wgdi(parse_species(species), **kargs)
 	else:
 		raise ValueError('Unknown command: {}'.format(subcommand))
 

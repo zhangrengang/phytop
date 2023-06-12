@@ -46,10 +46,12 @@ class Gene():
 		return int(re.compile(r'[^\d\s]+(\d+)').match(self.chr).groups()[0])
 
 class KaKs():
-	def __init__(self, info, fdtv=False, yn00=False, method='NG86', **kargs):
+	def __init__(self, info, fdtv=False, yn00=False, wgdi=False, method='NG86', **kargs):
 		self.info = info
 		if yn00:
 			self.parse_yn00(method=method)
+		elif wgdi:
+			self.parse_wgdi(method=method)
 		elif fdtv:
 			self.parse_4dtv()
 		else:
@@ -59,7 +61,7 @@ class KaKs():
 		(Sequence, fD_Sites, Identical_Sites, TS_Sites, TV_Sites, fDS, fDTS, fDTV, Corrected_4DTV) = self.info
 		self.sequence = Sequence
 		try: self.ks = float(Corrected_4DTV)
-		except ValueError: self.ks =None
+		except ValueError: self.ks = 0
 	def parse_yn00(self, method='NG86'):
 		(Sequence, dS_YN00, dN_YN00, dS_NG86, dN_NG86, 
 			dS_LWL85, dN_LWL85, dS_LWL85m, dN_LWL85m, dS_LPB93, dN_LPB93) = self.info
@@ -69,10 +71,25 @@ class KaKs():
 		ks = d[method.upper()]
 		try: self.ks = float(ks)
 		except ValueError: 
-			self.ks =None
+			self.ks = 0
 			return
 		if self.ks < 0 or np.isnan(self.ks):
-			self.ks =None
+			self.ks = 0
+	def parse_wgdi(self, method='NG86'):
+		try: (g1, g2, dN_NG86, dS_NG86, dN_YN00, dS_YN00) = self.info
+		except ValueError: 
+			(g1, g2) = self.info
+			self.pair = (g1, g2)
+			self.ks = None
+			return
+		self.pair = (g1, g2)
+		d = {'YN00': dS_YN00, 'NG86':dS_NG86}
+		ks = d[method.upper()]
+		try: self.ks = float(ks)
+		except ValueError:
+			self.ks = 0
+		if self.ks < 0 or np.isnan(self.ks):	# -1
+			self.ks = None
 	def parse_ks(self):
 		(Sequence, Method, Ka, Ks, Ka_Ks, P_Value, Length, 
 			S_Sites, N_Sites, Fold_Sites, Substitutions, 
@@ -81,14 +98,15 @@ class KaKs():
 			GC, ML_Score, AICc, Akaike_Weight, Model) = self.info
 		self.sequence = Sequence
 		self.method = Method
-		try: self.ka = float(Ka)
-		except ValueError: self.ka =None
+#		try: self.ka = float(Ka)
+#		except ValueError: self.ka =None
 		try: self.ks = float(Ks)
-		except ValueError: self.ks = 0	# too few substitution to calculate
-		try: self.kaks = float(Ka_Ks)
-		except ValueError: self.kaks = None
+		except ValueError: self.ks = 0	# too few substitution to calculate, NA
+#		try: self.kaks = float(Ka_Ks)
+#		except ValueError: self.kaks = None
 	def parse_pair(self):
-		self.pair = re.compile(r'(\S+)\-([A-Z][a-z]+[_\-]\S+\|\S+)').match(self.sequence).groups() #tuple(Sequence.split('-'))
+		if not hasattr(self, 'pair'):
+			self.pair = re.compile(r'(\S+)\-([A-Z][a-z]*[_\-]\S+\|\S+)').match(self.sequence).groups() #tuple(Sequence.split('-'))
 		self.species = self.gene2species(self.pair)
 	def gene2species(self, gene_pair):
 		sp1, sp2 = map(lambda x: x.split('|')[0], gene_pair)
@@ -104,12 +122,16 @@ class KaKsParser:
 	def _parse(self):
 		for line in open(self.kaks):
 			temp = line.rstrip().split()
-			if temp[0] == 'Sequence':
+#			print >> sys.stderr, temp
+			if temp[0] in {'Sequence', 'id1'}:
 				if temp[1] == 'dS-YN00':
 					self.kargs['yn00'] = True
+				elif temp[2] == 'ka_NG86':
+					self.kargs['wgdi'] = True
 				elif temp[1] == '4D_Sites':
 					self.kargs['fdtv'] = True
 				continue
+#			print >> sys.stderr, self.kargs
 			kaks = KaKs(temp, **self.kargs)
 			yield kaks
 	def to_dict(self):
@@ -119,14 +141,95 @@ class KaKsParser:
 			d[kaks.pair] = ks
 			d[tuple(reversed(kaks.pair))] = ks
 		return d
-	
+
+def collinearity_ratio(collinearity, chrmap, outMat, min_N=20):
+	from creat_ctl import get_good_chrs, Chrs
+	d_chrs = {rc.chr:rc.geneN for rc in Chrs(chrmap)}
+	good_chrs = get_good_chrs(chrmap, min_genes=200)
+	good_chrs = set(good_chrs)
+	chrs = set([])
+	d_count = {}
+	for rc in Collinearity(collinearity, ):
+		if rc.N < min_N:
+			continue
+		chr1, chr2 = rc.chr1, rc.chr2
+#		if chr1 == chr2:
+#			continue
+		if set([chr1, chr2]) - good_chrs:
+			continue
+		key = tuple(sorted([chr1, chr2]))
+		try: d_count[key] += rc.N
+		except KeyError: d_count[key] = rc.N
+		chrs = chrs | set([chr1, chr2 ])
+#	print >> sys.stderr, d_count
+	chrs = sorted(chrs)
+	print >> outMat, '\t'.join(['']+chrs)
+	for chr1 in chrs:
+		n1 = d_chrs[chr1]
+		line = [chr1]
+		for chr2 in chrs:
+			n2 = d_chrs[chr2]
+			key = tuple(sorted([chr1, chr2]))
+			cn = d_count.get(key, 0)
+			
+			ratio = cn*2.0 / (n1+n2)
+#			print  key, cn, n1,n2, ratio
+			line += [str(ratio)]
+			
+		print >> outMat, '\t'.join(line)
+def identify_orthologous_blocks(collinearity, OFdir, fout, 
+		gff=None, kaks=None, paralog=False, both=True, source=None, 
+		min_ratio=0.5, species=None, homo_class=None, test_diff=False):
+	if species is not None:
+		species = parse_species(species)
+	of = OrthoFinder(OFdir)
+	if both:
+		logger.info('loading orthologs of OrthoFinder')
+		ortholog_pairs = {tuple(sorted(x)) for x in of.get_orthologs(sps=species)}
+	else:
+		ortholog_pairs = set([])
+	if paralog:
+		logger.info('loading paralogs of OrthoFinder')
+		ortholog_pairs = ortholog_pairs | {tuple(sorted(x)) for x in of.get_paralogs2(sps=species)}
+	if homo_class is not None:
+		out_class = open(homo_class, 'w')
+	if test_diff:
+		d_ks = {}
+	pre_nb, pre_ng, post_nb, post_ng = 0, 0,0,0
+	logger.info('filtering collinearity')
+	for rc in Collinearity(collinearity, gff=gff, kaks=kaks, source=source):
+		pre_nb += 1
+		pre_ng += rc.N
+		pairs = { tuple(sorted(x)) for x in rc.pairs}
+		intersect = pairs & ortholog_pairs
+		ratio = 1.0*len(intersect) / len(pairs)
+		if not ratio > min_ratio:
+			continue
+		post_nb += 1
+		post_ng += rc.N
+#		info = rc.info + [ratio]
+#		print >> sys.stderr, '\t'.join(map(str, info))
+		rc.write(fout)
+		if homo_class:
+			substract = pairs - ortholog_pairs
+			for pairs, cls in zip((intersect, substract), ('ortholog', 'non-ortholog')):
+				for pair in pairs:
+					line = list(pair) + [cls]
+					print >> out_class, '\t'.join(line)
+#					if test_diff:
+						
+	logger.info('Pre-filter: {} blocks, {} pairs; Post-filter: {} ({:.1%}) blocks, {} ({:.1%}) pairs.'.format(
+		pre_nb, pre_ng, post_nb, 1.0*post_nb/pre_nb, post_ng, 1.0*post_ng/pre_ng))
+	if homo_class is not None:
+		out_class.close()
+
 class Collinearity():
 	'''
 	blocks = Collinearity(blockfile)
 	for rc in blocks:
 		genes1,genes2 = rc.genes1, rc.genes2
 	'''
-	def __init__(self, collinearity=None, gff=None, chrmap=None, kaks=None, homology=False, **ks_args):
+	def __init__(self, collinearity=None, gff=None, chrmap=None, kaks=None, homology=False, source=None, **ks_args):
 		self.collinearity = collinearity
 		self.gff = gff
 		self.chrmap = chrmap
@@ -137,6 +240,7 @@ class Collinearity():
 		#if self.chrmap is not None:
 		self.d_chr = self.map_chr()
 		self.homology = homology
+		self.source = source
 	def __iter__(self):
 		return self.parse()
 	def __str__(self):
@@ -153,9 +257,18 @@ class Collinearity():
 			head = []
 			self.head = 1
 			for line in open(self.collinearity):
-				if line.startswith('## Alignment'):
+				if re.compile(r'#+ Alignment').match(line):	# mcscanx or wgdi
+					if self.source is None and re.compile(r'# Alignment').match(line):
+						self.source = 'wgdi'
 					self.head = 0
 					self.header = ''.join(head)
+					if lines:
+						self.parse_lines(lines)
+						yield self
+						lines = []
+					lines.append(line)
+				elif re.compile(r'####$').match(line):	# jcvi
+					self.source = 'jcvi'
 					if lines:
 						self.parse_lines(lines)
 						yield self
@@ -176,28 +289,49 @@ class Collinearity():
 		self.block = ''.join(lines)
 		genes1, genes2 = [], []
 		for i, line in enumerate(lines):
-			if i == 0:
-				pattern = r'## Alignment (\d+): score=(\S+) e_value=(\S+) N=(\S+) (\S+)&(\S+) (plus|minus)'
-				self.Alignment, self.score, self.e_value, self.N, self.chr1, self.chr2, self.orient = \
+			if i == 0 and self.source == 'jcvi':
+				pass
+			elif i == 0:
+				pattern = r'#+ Alignment (\d+): score=(\S+) \S+value=(\S+) N=(\S+) (\S+)&(\S+) (plus|minus)'
+				try: self.Alignment, self.score, self.e_value, self.N, self.chr1, self.chr2, self.orient = \
 								re.compile(pattern).match(line).groups()
+				except AttributeError:
+					print >>sys.stderr, 'unparsed LINE: {}'.format(line)
+					raise AttributeError()
 				self.chrs = (self.chr1, self.chr2)
 				self.sp1 = self.short_sp1 = self.chr1[:2]
 				self.sp2 = self.short_sp2 = self.chr2[:2]
 				self.score = float(self.score)
 				self.e_value = float(self.e_value)
-				self.N = int(self.N)
+				self.length = self.N = int(self.N)
 				self.strand = {'plus': '+', 'minus': '-'}[self.orient]
+				self.id = self.Alignment
 			else:
-				pattern = r'.*?\d+.*?\d+:\s+(\S+)\s+(\S+)\s+\d+'
-				#print line
-				try: gene1, gene2 = re.compile(pattern).match(line).groups()
-				except AttributeError:
-					print >>sys.stderr, 'unparsed LINE: {}'.format(line)
-					continue
+				if self.source == 'jcvi':
+					gene1, gene2, score = line.strip().split()
+				elif self.source == 'wgdi':
+#					print >> sys.stderr, line.strip().split('\t')
+					gene1, idx1, gene2, idx2, strand = line.strip().split()
+					
+				else:
+					pattern = r'.*?\d+.*?\d+:\s+(\S+)\s+(\S+)\s+\d+'
+					#print line
+					try: gene1, gene2 = re.compile(pattern).match(line).groups()
+					except AttributeError:
+						print >>sys.stderr, 'unparsed LINE: {}'.format(line)
+						continue
 				genes1.append(gene1)
 				genes2.append(gene2)
+		if self.source == 'jcvi':
+			self.N = len(genes1)
+			self.Alignment, self.score, self.e_value = 0,0,0
 		self.parse_species(gene1, gene2)
 		self.parse_genes(genes1,genes2)
+	@property
+	def info(self):
+		return [self.id, self.species1, self.species2, self.chr1, self.chr2, 
+			self.istart1,self.iend1,self.istart2,self.iend2, 
+			self.N, self.median_ks, self.mean_ks]
 	def is_sp_pair(self, sp1, sp2):
 		if (sp1, sp2) == (self.short_sp1, self.short_sp2):
 			return (sp1, sp2)
@@ -252,12 +386,17 @@ class Collinearity():
 			self.start1 = min(start10, end10, start11, end11)
 			self.end1 = max(start10, end10, start11, end11)
 			self.length1 = self.end1 - self.start1 + 1
+			idx10 = self.d_gene[self.head1].index
+			idx11 = self.d_gene[self.tail1].index
+			self.istart1 = min(idx10, idx11)
+			self.iend1   = max(idx10, idx11)
 			try:	# raw chr id from `chr.list`
 				self.chr1 = self.d_chr[chr10]
 			except KeyError:
 				pass
 		except KeyError:
 			self.start1, self.end1, self.length1 = None, None, None
+			self.istart1, self.iend1 = None, None
 		try:
 			chr20, start20, end20 = self.d_gene[self.head2].coord
 			chr21, start21, end21 = self.d_gene[self.tail2].coord
@@ -265,12 +404,17 @@ class Collinearity():
 			self.start2 = min(start20, end20, start21, end21)
 			self.end2 = max(start20, end20, start21, end21)
 			self.length2 = self.end2 - self.start2 + 1
+			idx20 = self.d_gene[self.head2].index
+			idx21 = self.d_gene[self.tail2].index
+			self.istart2 = min(idx20, idx21)
+			self.iend2   = max(idx20, idx21)
 			try:
 				self.chr2 = self.d_chr[chr20]
 			except KeyError:
 				pass
 		except KeyError:
 			self.start2, self.end2, self.length2 = None, None, None
+			self.istart2, self.iend2 = None, None
 	@property
 	def good_ks(self):
 		return [ks for ks in self.ks if ks is not None]
@@ -315,6 +459,7 @@ class Collinearity():
 			for i, gene in enumerate(genes):
 				gene.index = i
 				d[gene.id] = gene
+#			print >> sys.stderr, chr, gene.id, i
 		self.chr_length = d_length
 		self.d_chrom = d_chrom
 		self.chr_ngenes = d_ngenes
@@ -332,18 +477,20 @@ class Collinearity():
 		d = {}
 		if self.kaks is None:
 			return d
-		for line in open(self.kaks):
-			temp = line.rstrip().split()
-			if temp[0] == 'Sequence':
-				if temp[1] == 'dS-YN00':
-					kargs['yn00'] = True
-				elif temp[1] == '4D_Sites':
-					kargs['fdtv'] = True
-				continue
+		for kaks in KaKsParser(self.kaks, **kargs):
+#		for line in open(self.kaks):
+#			temp = line.rstrip().split()
+#			if temp[0] == 'Sequence':
+#				if temp[1] == 'dS-YN00':
+#					kargs['yn00'] = True
+#				elif temp[1] == '4D_Sites':
+#					kargs['fdtv'] = True
+#				continue
 #			if line.startswith('#') or not temp:
 #				continue
-			kaks = KaKs(temp, **kargs)
-			ks = kaks	#.ks
+#			kaks = KaKs(temp, **kargs)
+#			ks = kaks	#.ks
+			ks = kaks
 			d[kaks.pair] = ks
 			d[tuple(reversed(kaks.pair))] = ks
 		return d
@@ -398,6 +545,7 @@ def anchors2bed(collinearity, gff, chrmap, left_anchors, right_anchors, outbed=s
 	print >> outbed, '\t'.join(line)
 	
 
+	
 class Gff:
 	def __init__(self, gff):
 		self.gff = gff
@@ -421,12 +569,13 @@ class Gff:
 			d[line.gene] = line
 		return d
 	def get_indexed_genes(self):
-		d_chrom = {}
+		d_chrom = OrderedDict()
 		for line in self:
 			try: d_chrom[line.chrom] += [line]
 			except KeyError: d_chrom[line.chrom] = [line]
-		d_genes = {}
-		d_length = {}
+		d_genes = OrderedDict()
+		d_length = OrderedDict()
+		d_length2 = OrderedDict()
 		species = set([])
 		for chrom, lines in d_chrom.items():
 			lines = sorted(lines, key=lambda x:x.start)
@@ -435,11 +584,78 @@ class Gff:
 				d_genes[line.gene] = line
 		#	d_chrom[chrom] = lines
 			d_length[chrom] = line.end
+			d_length2[(line.species, chrom)] = line.end, len(lines)
 			species.add(line.species)
 		self.d_length = d_length
+		self.d_length2 = d_length2
 		#self.d_chrom = d_chrom
 		self.species = species
 		return d_genes
+	def to_wgdi(self, chrLst='chr.list', pep='pep.faa', cds='cds.fa', indir='.', outdir='wgdi', species=None, split=True):
+		from creat_ctl import get_good_chrs
+		self.gff = os.path.join(indir, self.gff)
+		chrLst = os.path.join(indir, chrLst)
+		pep = os.path.join(indir, pep)
+		cds = os.path.join(indir, cds)
+
+		good_chrs = get_good_chrs(chrLst, min_genes=200)
+		d_pep = {rc.id:rc for rc in SeqIO.parse(pep, 'fasta')}
+		d_cds = {rc.id:rc for rc in SeqIO.parse(cds, 'fasta')}
+		mkdirs(outdir)
+		d_handle = {}
+		d_genes = self.get_indexed_genes()
+		if species is None:
+			species = self.species
+		else:
+			species = parse_species(species)
+#		all_gff = '{}/all.gff'.format(outdir, )
+		#open files
+		for sp in species:
+			if split:
+				prefix = '{}/{}'.format(outdir, sp)
+			else:
+				prefix = '{}/{}'.format(outdir, 'all')
+			gff = prefix + '.gff'
+			lens = prefix + '.lens'
+			cds = prefix + '.cds'
+			pep = prefix + '.pep'
+			if not split and d_handle:
+				d_handle[sp] = d_handle.values()[0]
+			else: 
+				d_handle[sp] = open(gff, 'w'), open(lens, 'w'), None,None #open(cds, 'w'), open(pep, 'w')
+		# gff
+		for line in d_genes.values():
+		#	print >> sys.stderr, line
+			sp = line.species
+			if sp not in set(species):
+				continue
+			gff,_,cds, pep = d_handle[sp]
+#			for d, h in zip((d_pep,d_cds), (pep, cds)):
+#				try:
+#					SeqIO.write(d[line.gene], h, 'fasta')
+#				except KeyError: pass
+			chrom = line.chrom
+#			chrom = chrom[2:]
+			line = [chrom, line.gene, line.start, line.end, line.strand, line.index+1, line.gene]
+			print >> gff, '\t'.join(map(str, line))
+#			line[0] = line.chrom
+#			print >> all_gff, '\t'.join(map(str, line))
+		# lens
+		for (sp, chrom), (g_len, bp_len) in self.d_length2.items():
+			if sp not in set(species):
+				continue
+			if chrom not in set(good_chrs):
+				continue
+			_, lens, _,_ = d_handle[sp]
+#			chrom = chrom[2:]
+			line = (chrom, g_len, bp_len)
+			print >> lens, '\t'.join(map(str, line))
+		# close files
+		for sp in species:
+			for hd in d_handle[sp]:
+				try: hd.close()
+				except: pass
+			
 	def fetch(self, g1,g2):
 		'''g1 and g2 is in the same chromosome'''
 		d_chrom = {}
@@ -507,18 +723,22 @@ class GffLine:
 def get_gff(gff, species, fout):
 	sps = {line.strip().split()[0] for line in open(species)}
 	Gff(gff).get_sps(sps, fout)
-		
-class Pair:	# gene pair
-	def __init__(self, *pair):
-#		self.line = line
-		self.pair = pair #tuple(line.rstrip().split(sep, 1))
-		self.gene1, self.gene2 = self.pair
-		self.species1 = self.gene1.split('|')[0]
-		self.species2 = self.gene2.split('|')[0]
-		self.species = SpeciesPair(self.species1, self.species2)
-	def write(self, fout):
-		self.line = '{}\t{}\n'.format(*self.pair)
-		fout.write(self.line)
+def get_ks(ksfile, pairfile, outks, outpair, source='wgdi'): # for wgdi	
+	pairs = {CommonPair(*line.strip().split()) for line in pairfile}
+	i = 0
+	got_pairs = set([])
+	for line in open(ksfile):
+		i += 1
+		if i == 1:
+			outks.write(line)
+			continue
+		pair = CommonPair(*line.strip().split())
+		if pair in pairs and pair not in got_pairs:
+			outks.write(line)
+			got_pairs.add(pair)
+	for pair in pairs - got_pairs:
+		pair.write(outpair)
+
 def slim_tandem(tandem, pairs, outPairs):
 	slim_genes = Tandem(tandem).slims()
 	for pair in Pairs(pairs):
@@ -530,9 +750,9 @@ def split_pair(line, sep=None, parser=None):
 	pair = tuple(line.rstrip().split(sep, 1))
 	return parser(*pair)
 	
-class SpeciesPair:
+class CommonPair(object):
 	def __init__(self, *pair):
-		self.pair = pair
+		self.pair = pair[:2]
 	def __iter__(self):
 		return iter(self.pair)
 	def __getitem__(self, index):
@@ -551,6 +771,19 @@ class SpeciesPair:
 			return self.key == other.key
 	def __hash__(self):
 		return hash(self.key)
+	def write(self, fout):
+		self.line = '{}\t{}\n'.format(*self.pair)
+		fout.write(self.line)
+class SpeciesPair(CommonPair):
+	def __init__(self, *pair):
+		super(SpeciesPair, self).__init__(*pair)
+class Pair(CommonPair): # gene pair
+	def __init__(self, *pair):
+		super(Pair, self).__init__(*pair)
+		self.gene1, self.gene2 = self.pair
+		self.species1 = self.gene1.split('|')[0]
+		self.species2 = self.gene2.split('|')[0]
+		self.species = SpeciesPair(self.species1, self.species2)
 		
 class Pairs(object):
 	def __init__(self, pairs, sep=None, parser=Pair):
@@ -755,7 +988,7 @@ GenetreesTitle = ['OG', 'genes', 'genetree', 'min_bootstrap', 'topology_species'
 				'chromosomes', 'topology_chromosomes']
 
 class ColinearGroups:
-	def __init__(self, collinearity, spsd=None, 
+	def __init__(self, collinearity=None, spsd=None, 
 				kaks=None, seqfile=None, gff=None, 
 				min_size=0, tmpdir='./tmp', 
 				orthologs=None, 	# 直系同源关系。共线性的备选，无基因组或染色体时使用
@@ -1354,7 +1587,7 @@ class ColinearGroups:
 			iqtreefiles += [iqtreefile]
 			d_alnfiles[alnTrim] = chroms
 			if not os.path.exists(iqtreefile):
-				cmd = 'mafft --auto {} > {} 2> /dev/null'.format(outSeq, alnSeq)
+				cmd = '. ~/.bashrc; mafft --auto {} > {} 2> /dev/null'.format(outSeq, alnSeq)
 				cmds += [cmd]
 				cmd = 'trimal -automated1 -in {} -out {} &> /dev/null'.format(alnSeq, alnTrim)
 				cmds += [cmd]
@@ -1427,7 +1660,7 @@ class ColinearGroups:
 		print >>sys.stdout, sps
 		for counts, count in sorted(my_counts):
 			print >>sys.stdout, counts, count
-	def chrom_tree(self, target_chroms, min_ratio=0.3, min_seqs=3):
+	def chrom_tree(self, target_chroms, min_ratio=0.3, min_seqs=4):
 		'''按染色体串联（允许丢失）'''
 		prefix = '-'.join(target_chroms)
 		d_gff = self.d_gff
@@ -1485,14 +1718,14 @@ class ColinearGroups:
 			alnTrim = alnSeq + '.trimal'
 			d_alnfiles[alnTrim] = chroms
 			if True: #not os.path.exists(alnTrim):
-				cmd = 'mafft --auto {} > {} 2> /dev/null'.format(outSeq, alnSeq)
+				cmd = '. ~/.bashrc; mafft --auto {} > {} 2> /dev/null'.format(outSeq, alnSeq)
 				cmds += [cmd]
 				cmd = 'trimal -automated1 -in {} -out {} &> /dev/null'.format(alnSeq, alnTrim)
 				cmds += [cmd]
 				opts = ''
 				if not root is None:
 					opts = '-o {}'.format(root)
-				cmd = 'iqtree -redo -s {} -nt AUTO -bb 1000 {} -mset JTT &> /dev/null'.format(alnTrim, opts)
+				cmd = 'iqtree -redo -s {} -nt 1  {} -mset JTT &> /dev/null'.format(alnTrim, opts)
 				cmds += [cmd]
 			#cmds += ['rm '+outSeq]
 			cmds = ' && '.join(cmds)
@@ -1630,7 +1863,7 @@ class ColinearGroups:
 		if not root is None:
 			opts = '-o ' + root
 		if not os.path.exists(iqtreefile):
-			cmd = 'iqtree -redo -s {} -nt AUTO -bb 1000 {} &> /dev/null'.format(concat_alnfile, opts)
+			cmd = '. ~/.bashrc; iqtree -redo -s {} -nt AUTO -bb 1000 {} &> /dev/null'.format(concat_alnfile, opts)
 			cmds += [cmd]
 		if root is None:
 			cmd = 'nw_reroot {} '.format(iqtreefile)
@@ -2089,6 +2322,7 @@ def test():
 def list_blocks(collinearity, outTsv, gff=None, kaks=None):
 	'''以共线性块为单位，输出信息'''
 	line = ["Alignment", "species1", "species2", "chr1", "chr2", "start1", "end1", "length1", "start2", "end2", "length2", "strand", "N_gene", "mean_Ks", 'median_Ks', 'score', 'e_value']
+	line = ["id", "species1", "species2", "chr1", "chr2", "start1", "end1", "length1", "start2", "end2", "length2", "strand", "length", "ks_average", 'ks_median', 'score', 'e_value']
 	print >> outTsv, '\t'.join(line)
 	for rc in Collinearity(collinearity,gff=gff,kaks=kaks):
 		sp1, sp2 = rc.species
@@ -2220,7 +2454,7 @@ def main():
 		collinearity, spsd, seqfile, gff = sys.argv[2:6]
 		try: tmpdir = sys.argv[6]
 		except IndexError: tmpdir = 'tmp'
-		cg_trees(collinearity, spsd, seqfile, gff, tmpdir)
+		cg_trees(collinearity, spsd, seqfile, gff, tmpdir, **kargs)
 	elif subcmd == 'anchor_trees':	# 按照物种倍性构建基因树/染色体树，以染色体作为anchor（因此过滤标准严格）
 		collinearity, spsd, seqfile, gff = sys.argv[2:6]
 		try: tmpdir = sys.argv[6]
@@ -2272,6 +2506,20 @@ def main():
 	elif subcmd == 'to_astral':
 		input, pep = sys.argv[2:4]
 		ToAstral(input, pep, **kargs).run()
+	elif subcmd == 'to_wgdi':
+		try: gff, chrLst, pep, cds = sys.argv[2:6]
+		except: gff, chrLst, pep, cds = 'all_species_gene.gff', 'chr.list', 'pep.faa', 'cds.fa'
+		Gff(gff).to_wgdi(chrLst, pep, cds, **kargs)
+	elif subcmd == 'cr':
+		collinearity, chrmap = sys.argv[2:4]
+		collinearity_ratio(collinearity, chrmap, outMat=sys.stdout, **kargs)
+	elif subcmd == 'ortho_block':
+		collinearity, OFdir = sys.argv[2:4]
+		fout = sys.stdout
+		identify_orthologous_blocks(collinearity, OFdir, fout, **kargs)
+	elif subcmd == 'get_ks':
+		ksfile = sys.argv[2]
+		get_ks(ksfile, pairfile=sys.stdin, outks=sys.stdout, outpair=sys.stderr, **kargs)
 	else:
 		raise ValueError('Unknown sub command: {}'.format(subcmd))
 if __name__ == '__main__':

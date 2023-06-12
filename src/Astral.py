@@ -4,11 +4,13 @@ import math
 import itertools
 import numpy as np
 from collections import OrderedDict
-from ete3 import Tree, TreeStyle, AttrFace, NodeStyle, ImgFace
+from ete3 import Tree, TreeStyle, AttrFace, NodeStyle, ImgFace, faces
 from ete3.coretype.tree import TreeError
 from scipy.stats import chi2
 from .RunCmdsMP import logger, run_cmd
 from .small_tools import mk_ckp, check_ckp
+
+COLORS = ('#1f77b4', '#ff7f0e', '#2ca02c', '#d62728')
 
 class BL:
 	def __init__(self, species_tree, gene_trees):
@@ -106,10 +108,11 @@ def convertNHX(inNwk, ):
 class AstralTree:
 	def __init__(self, astral, alter=None, genetrees=None, 
 			max_pval=0.05, tmpdir='tmp', prefix=None, both_plot=True,
-			clades=None, onshow=None, noshow=None,
+			clades=None, onshow=None, noshow=None, add_bl=False,
 			collapsed=None, subset=None, sort=False, notext=False,
 			test_clades=None, astral_bin='astral-pro', outgroup=None,
-			figsize=3, fontsize=14):
+			pie=False, cp=False, 
+			figsize=3, fontsize=13):
 		self.treefile = astral
 		self.treestr = convertNHX(self.treefile)
 		self.tree = Tree(self.treestr)
@@ -128,11 +131,14 @@ class AstralTree:
 		self.outgroup = outgroup
 		self.alter = alter	# show another tree
 		self.genetrees = genetrees	# branch lengths
+		self.add_bl = add_bl	# add branch lengths
 		self.sort = sort	# sort q1,q2,q3 or not
 		self.notext = notext # draw text or not
 		self.figsize = figsize	# barcharts
 		self.fontsize = fontsize	# barcharts
 		self.both_plot = both_plot # plot both histogram and barcharts
+		self.pie = pie
+		self.cp = cp
 		if self.prefix is None:
 			self.prefix = os.path.basename(self.treefile)
 		
@@ -142,7 +148,7 @@ class AstralTree:
 Please check...'.format(self.treefile))
 	def lazy_parse_clades(self, args):
 		if not args:
-			return 
+			return args
 		clades =[]
 		for arg in args:
 			if os.path.exists(arg) and os.path.getsize(arg)>0:
@@ -172,6 +178,8 @@ Please check...'.format(self.treefile))
 			i += 1
 			if node.name:
 				continue
+#			if node.is_root():
+#				node.support = ''
 			name = 'N{}'.format(i)
 			node.name = name
 			line = [name, ','.join(node.get_leaf_names())]
@@ -207,20 +215,22 @@ Please check...'.format(self.treefile))
 		ingroups = self.test_clades[1:]
 		for ingroup3 in itertools.combinations(ingroups, 3):
 			ingroup3 = list(ingroup3)
+			logger.info('Testing {} (outgroup) + {} (ingroup)'.format(outgroup, ingroup3))
 			subset_leaf_names = self.get_leaf_names(tree0, [outgroup] + ingroup3, d_map)
+			outgroup_leaf_names = self.get_leaf_names(tree0, [outgroup], d_map)
 			self.prefix = '{}.{}'.format(prefix0, '-'.join(ingroup3))
 			genetrees = '{}/{}.genetrees'.format(self.tmpdir, self.prefix)
 			sptree = genetrees + '.astral'
-			cmd = 'nw_prune {genetrees0} {leaves} -v > {genetrees} && {astral_bin} -i {genetrees} -u 2 -t 4 -o {sptree}'.format(
+			cmd = 'nw_prune {genetrees0} {leaves} -v | nw_reroot -l - {outgroup} > {genetrees} && {astral_bin} -i {genetrees} -u 2 -t 4 -o {sptree}'.format(
 					genetrees0=self.genetrees, leaves=' '.join(subset_leaf_names), genetrees=genetrees,
-					astral_bin=self.astral_bin, sptree=sptree)
+					astral_bin=self.astral_bin, sptree=sptree, outgroup=' '.join(outgroup_leaf_names) )
 			run_cmd(cmd, log=True)
 			self.tree = Tree(convertNHX(sptree))
 			self.process_quartet()
 	def run(self):
 		if self.test_clades is not None:
 			if self.test_clades == []:
-				self.test_clades = self.clades.keys()
+				self.test_clades = list(self.clades.keys())
 			if self.outgroup:
 				self.test_clades = [self.outgroup] + [c for c in self.test_clades if c != self.outgroup]
 			self.test()
@@ -238,7 +248,7 @@ Please check...'.format(self.treefile))
 		logger.info('Clades info file: `{}`, which can be renamed and edited as input of `-clades`'.format(clades_file))
 		
 		# load genetrees
-		if self.genetrees and not self.test_clades:
+		if self.genetrees and self.add_bl:
 			ckpfile = '{}/{}.genetrees.dists'.format(self.tmpdir, self.prefix)
 			data = check_ckp(ckpfile)
 			if data:
@@ -263,10 +273,12 @@ Please check...'.format(self.treefile))
 		f_info = open(info_file, 'w')
 		line = ['node', 'n', 'p_value', 'q1', 'q2', 'q3', 'ILS_explain', 'IH_explain', 'ILS_index', 'IH_index']
 		f_info.write('\t'.join(line)+'\n')
+		_colors = COLORS[:3]
+		fsize = 12 if self.pie else 60
 		for node in self.tree.traverse():
 			if node.is_leaf():
-				node.sp = '{}'.format(node.name.replace('_', " "))
-				N = AttrFace("sp", fsize=16, fgcolor="black", fstyle='italic')
+				node.sp = ' {}'.format(node.name.replace('_', " "))
+				N = AttrFace("sp", fsize=fsize, fgcolor="black", fstyle='italic')
 				node.add_face(N, 0, ) #position='aligned')
 			#	node.img_style["draw_descendants"] = False
 				continue
@@ -320,27 +332,40 @@ Please check...'.format(self.treefile))
 
 			kargs = dict(hline=hline, text=text,
 					sort=self.sort, notext=self.notext, figsize=self.figsize, fontsize=self.fontsize)
-			if self.both_plot and self.genetrees and not self.test_clades:
-				outfig = '{}/{}.{}.both.pdf'.format(self.tmpdir, self.prefix, name)
-				joint_plot(bardata=[q1, q2, q3], histdata=d_dist[node.name], outfig=outfig, **kargs)
-			else:
-				outfig = '{}/{}.{}.bar.pdf'.format(self.tmpdir, self.prefix, name)
-				values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, **kargs)
+			if not self.pie:
+				if self.both_plot and self.genetrees and self.add_bl:
+					outfig = '{}/{}.{}.both.pdf'.format(self.tmpdir, self.prefix, name)
+					joint_plot(bardata=[q1, q2, q3], histdata=d_dist[node.name], outfig=outfig, **kargs)
+				else:
+					outfig = '{}/{}.{}.bar.png'.format(self.tmpdir, self.prefix, name)
+					values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, **kargs)
 					#hline=hline, text=text, 
 					#sort=self.sort, notext=self.notext, figsize=self.figsize, fontsize=self.fontsize)
 		#	outfig = '{}/{}.{}.dist.pdf'.format(self.tmpdir, self.prefix, name)
 		#	plot_dist(data=d_dist[node.name], outfig=outfig, figsize=self.figsize,)
 			if node.show:	
-				face = ImgFace(outfig)
-				#face = faces.SVGFace(outfig)
-#				face = faces.BarChartFace(values, colors=colors, labels=labels, min_value=0, max_value=1, width=100, height=100, label_fsize=2, scale_fsize=2)
-				#faces.add_face_to_node(face, node, column=0)
-				node.add_face(face, column=0, position="branch-right")
+				if self.pie:
+					values = [v*100 for v in [q1, q2, q3]]
+					values = [values[x] for x in [1,0,2]]
+					colors = [_colors[x] for x in [1,0,2]]
+					face = faces.PieChartFace(values, width=30, height=30, colors=colors,)
+					node.add_face(face, column=1, position="branch-right")
+					if self.cp:
+						cp = '{:.0f}'.format(values[1])
+						concord_text = faces.TextFace(cp, fsize=8)
+						node.add_face(concord_text, column=0, position = "branch-top")
+				else:
+					#print(outfig)
+					face = ImgFace(outfig, ) #width=500, height=500)
+					#face = faces.SVGFace(outfig)
+#					face = faces.BarChartFace(values, colors=colors, labels=labels, min_value=0, max_value=1, width=100, height=100, label_fsize=2, scale_fsize=2)
+					#faces.add_face_to_node(face, node, column=0)
+					node.add_face(face, column=0, position="branch-right")
 			line = [name, n, pval, q1, q2, q3, ILS_explain, IH_explain, ILS_index, IH_index]
 			line = map(str, line)
 			f_info.write('\t'.join(line)+'\n')
 		f_info.close()
-
+#		print(dir(node))
 		# write tree
 		labeled_treefile = '{}/{}.label.tree'.format(self.tmpdir, self.prefix)
 		self.tree.write(format=1, outfile=labeled_treefile)
@@ -356,11 +381,11 @@ Please check...'.format(self.treefile))
 		style = NodeStyle()
 		style["fgcolor"] = "#0f0f0f"
 		style["size"] = 0
-		branch_color = '#7200da'
-		style["vt_line_color"] = branch_color
-		style["hz_line_color"] = branch_color
-		style["vt_line_width"] = 4
-		style["hz_line_width"] = 4
+#		branch_color = '#7200da'
+#		style["vt_line_color"] = branch_color
+#		style["hz_line_color"] = branch_color
+		style["vt_line_width"] = 1
+		style["hz_line_width"] = 1
 #		style["vt_line_type"] = 0 # 0 solid, 1 dashed, 2 dotted
 #		style["hz_line_type"] = 0
 #		self.tree.set_style(style)
@@ -432,7 +457,6 @@ def collapsed_leaf(node):
 	return node not in d_collapse
 
 
-colors = ('#1f77b4', '#ff7f0e', '#2ca02c', '#d62728')
 def joint_plot(bardata, histdata, outfig=None, figsize=3, **kargs):
 	from matplotlib import gridspec
 	import matplotlib.pyplot as plt
@@ -451,7 +475,7 @@ def joint_plot(bardata, histdata, outfig=None, figsize=3, **kargs):
 	kargs['fontsize'] /= 2
 	plot_dist(histdata, axs=axs, **kargs)
 	plot_bar(bardata, ax=ax, **kargs)
-	plt.savefig(outfig, bbox_inches='tight', transparent=True, dpi=600)
+	plt.savefig(outfig, bbox_inches='tight', transparent=True, dpi=300)
 	plt.close()
 
 def plot_bar(qs=[1,0,0], outfig=None, ax=None, hline=None, ymax=1, text=None, sort=False, notext=False,
@@ -466,7 +490,7 @@ def plot_bar(qs=[1,0,0], outfig=None, ax=None, hline=None, ymax=1, text=None, so
 #	plt.figure(figsize=(figsize, figsize))
 	x = list(range(len(qs)))
 	labs = ['q{}'.format(v+1) for v in x]
-	cs = colors[:len(qs)]
+	cs = COLORS[:len(qs)]
 	print(x, qs, hline)
 	ax.bar(x, qs, color=cs, tick_label=labs, align='center', width=0.67)
 	if hline is not None:
@@ -475,8 +499,10 @@ def plot_bar(qs=[1,0,0], outfig=None, ax=None, hline=None, ymax=1, text=None, so
 		ax.text(0.3*max(x), 0.98*ymax, text, fontsize=fontsize,
 				horizontalalignment='left', verticalalignment='top')
 	ax.set_ylim(0, ymax)
+	for label in ax.yaxis.get_majorticklabels():
+		label.set_rotation('vertical')
 	if outfig is not None:
-		plt.savefig(outfig, bbox_inches='tight', transparent=True, dpi=600)
+		plt.savefig(outfig, bbox_inches='tight', transparent=True, dpi=300)
 		plt.close()
 	return qs, labs, cs
 def plot_dist(data, axs=None, outfig=None, figsize=3, bins=30, limit=97.5, **kargs):
@@ -498,6 +524,14 @@ def plot_dist(data, axs=None, outfig=None, figsize=3, bins=30, limit=97.5, **kar
 		ax.hist(data[key], color=color, range=(0,xlim), bins=bins)
 #		ax.set_ylabel('')
 		ax.set_xlim(0, xlim)
+		if key != 'q3':
+			for label in ax.xaxis.get_majorticklabels():
+				label.set_visible(False)
+			for tick in ax.xaxis.get_ticklines():
+				tick.set_visible(False)
+			for tick in ax.xaxis.get_minorticklines():
+				tick.set_visible(False)
+
 	if outfig is not None:
 		plt.savefig(outfig, bbox_inches='tight', transparent=True, dpi=600)
 		plt.close()
