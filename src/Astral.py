@@ -112,7 +112,10 @@ class AstralTree:
 			collapsed=None, subset=None, sort=False, notext=False,
 			test_clades=None, astral_bin='astral-pro', outgroup=None,
 			pie=False, cp=False, 
-			figsize=3, fontsize=13):
+			figsize=3, fontsize=13,
+			pie_leaf_size=11, bar_leaf_size=60,
+			pie_size=30,
+			):
 		self.treefile = astral
 		self.treestr = convertNHX(self.treefile)
 		self.tree = Tree(self.treestr)
@@ -139,6 +142,9 @@ class AstralTree:
 		self.both_plot = both_plot # plot both histogram and barcharts
 		self.pie = pie
 		self.cp = cp
+		self.leaf_size = pie_leaf_size if self.pie else bar_leaf_size
+		self.pie_size = pie_size
+
 		if self.prefix is None:
 			self.prefix = os.path.basename(self.treefile)
 		
@@ -274,7 +280,7 @@ Please check...'.format(self.treefile))
 		line = ['node', 'n', 'p_value', 'q1', 'q2', 'q3', 'ILS_explain', 'IH_explain', 'ILS_index', 'IH_index']
 		f_info.write('\t'.join(line)+'\n')
 		_colors = COLORS[:3]
-		fsize = 12 if self.pie else 60
+		fsize = self.leaf_size
 		for node in self.tree.traverse():
 			if node.is_leaf():
 				node.sp = ' {}'.format(node.name.replace('_', " "))
@@ -348,7 +354,7 @@ Please check...'.format(self.treefile))
 					values = [v*100 for v in [q1, q2, q3]]
 					values = [values[x] for x in [1,0,2]]
 					colors = [_colors[x] for x in [1,0,2]]
-					face = faces.PieChartFace(values, width=30, height=30, colors=colors,)
+					face = faces.PieChartFace(values, width=self.pie_size, height=self.pie_size, colors=colors,)
 					node.add_face(face, column=1, position="branch-right")
 					if self.cp:
 						cp = '{:.0f}'.format(values[1])
