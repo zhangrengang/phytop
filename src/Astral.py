@@ -111,10 +111,13 @@ class AstralTree:
 			clades=None, onshow=None, noshow=None, add_bl=False,
 			collapsed=None, subset=None, sort=False, notext=False,
 			test_clades=None, astral_bin='astral-pro', outgroup=None,
-			pie=False, cp=False, 
-			figsize=3, fontsize=13,
-			pie_leaf_size=11, bar_leaf_size=60,
-			pie_size=30,
+			pie=False, cp=False, figfmt='png', 
+			figsize=3, fontsize=13, 
+			branch_size=48, # fontsize of branch text
+			leaf_size=60,
+			pie_size=30, pie_fold=6,
+			align=False, # align tip labels
+			polytomy_test=False, # test for polytomies
 			):
 		self.treefile = astral
 		self.treestr = convertNHX(self.treefile)
@@ -138,19 +141,27 @@ class AstralTree:
 		self.sort = sort	# sort q1,q2,q3 or not
 		self.notext = notext # draw text or not
 		self.figsize = figsize	# barcharts
-		self.fontsize = fontsize	# barcharts
+		self.fontsize = fontsize	# barcharts text
+		self.branch_size = branch_size
+		self.figfmt = figfmt
 		self.both_plot = both_plot # plot both histogram and barcharts
 		self.pie = pie
 		self.cp = cp
-		self.leaf_size = pie_leaf_size if self.pie else bar_leaf_size
+		self.leaf_size = leaf_size
+		if self.pie:
+			self.leaf_size = self.leaf_size / pie_fold
+			self.branch_size = self.branch_size / pie_fold
 		self.pie_size = pie_size
-
+		self.align = align
+		self.polytomy_test = polytomy_test
 		if self.prefix is None:
 			self.prefix = os.path.basename(self.treefile)
 		
 	def check(self):
 		if not re.compile(r'f1=\S+f2=\S+f3=\S+').search(self.treestr):
-			raise ValueError('Keys f1, f2 and f3 are not found in {}. \
+			#raise ValueError('Keys f1, f2 and f3 are not found in {}. \
+#Please check...'.format(self.treefile))
+			logger.warn('Keys f1, f2 and f3 are not found in {}. \
 Please check...'.format(self.treefile))
 	def lazy_parse_clades(self, args):
 		if not args:
@@ -285,7 +296,10 @@ Please check...'.format(self.treefile))
 			if node.is_leaf():
 				node.sp = ' {}'.format(node.name.replace('_', " "))
 				N = AttrFace("sp", fsize=fsize, fgcolor="black", fstyle='italic')
-				node.add_face(N, 0, ) #position='aligned')
+				if self.align:
+					node.add_face(N, 0, position='aligned')
+				else:
+					node.add_face(N, 0, )
 			#	node.img_style["draw_descendants"] = False
 				continue
 			try:
@@ -301,6 +315,8 @@ Please check...'.format(self.treefile))
 			#eq2 = eq3 = math.exp(-coalescent_unit) / 3	# expected
 			eq2 = eq3 = (1-q1) / 2	# expected
 			eq1 = 1 - eq2 - eq3
+			if self.polytomy_test:
+				eq1 = eq2 = eq3 = 1.0/3
 			ef1, ef2, ef3 = n*eq1, n*eq2, n*eq3
 			try: chi_sq = (ef1-f1)**2/ef1 + (ef2-f2)**2/ef2 + (ef3-f3)**2/ef3
 			except ZeroDivisionError: chi_sq = 0
@@ -323,7 +339,8 @@ Please check...'.format(self.treefile))
 			ILS_index = ILS_index / (1.0/3)
 			IH_index = IH_index
 			print(hline, pval, i, f1, f2, f3, n, [q1, q2, q3])
-			pp = node.support
+			try: pp = node.support = float(node.pp1)
+			except AttributeError: pp = node.support
 			# theta = 2* Lm/Lc
 			i += 1
 #			name = 'N{}'.format(i)
@@ -340,31 +357,39 @@ Please check...'.format(self.treefile))
 					sort=self.sort, notext=self.notext, figsize=self.figsize, fontsize=self.fontsize)
 			if not self.pie:
 				if self.both_plot and self.genetrees and self.add_bl:
-					outfig = '{}/{}.{}.both.pdf'.format(self.tmpdir, self.prefix, name)
+					outfig = '{}/{}.{}.both.{}'.format(self.tmpdir, self.prefix, name, self.figfmt)
 					joint_plot(bardata=[q1, q2, q3], histdata=d_dist[node.name], outfig=outfig, **kargs)
 				else:
-					outfig = '{}/{}.{}.bar.png'.format(self.tmpdir, self.prefix, name)
+					outfig = '{}/{}.{}.bar.{}'.format(self.tmpdir, self.prefix, name, self.figfmt)
 					values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, **kargs)
 					#hline=hline, text=text, 
 					#sort=self.sort, notext=self.notext, figsize=self.figsize, fontsize=self.fontsize)
 		#	outfig = '{}/{}.{}.dist.pdf'.format(self.tmpdir, self.prefix, name)
 		#	plot_dist(data=d_dist[node.name], outfig=outfig, figsize=self.figsize,)
 			if node.show:	
+				if self.cp:
+					cp = '{:.0f}'.format(max(q1, q2, q3)*100)
+					concord_text = faces.TextFace(cp, fsize=self.branch_size)
+					node.add_face(concord_text, column=0, position = "branch-top")
+				pp = '{:.0f}'.format(pp*1e2)
+				support_text = faces.TextFace(pp, fsize=self.branch_size)
+				if not node.is_root():
+					node.add_face(support_text, column=0, position = "branch-bottom")
 				if self.pie:
 					values = [v*100 for v in [q1, q2, q3]]
 					values = [values[x] for x in [1,0,2]]
 					colors = [_colors[x] for x in [1,0,2]]
 					face = faces.PieChartFace(values, width=self.pie_size, height=self.pie_size, colors=colors,)
 					node.add_face(face, column=1, position="branch-right")
-					if self.cp:
-						cp = '{:.0f}'.format(values[1])
-						concord_text = faces.TextFace(cp, fsize=8)
-						node.add_face(concord_text, column=0, position = "branch-top")
+#					if self.cp:
+#						cp = '{:.0f}'.format(values[1])
+#						concord_text = faces.TextFace(cp, fsize=8)
+#						node.add_face(concord_text, column=0, position = "branch-top")
 				else:
-					#print(outfig)
+					print(outfig)
 					face = ImgFace(outfig, ) #width=500, height=500)
 					#face = faces.SVGFace(outfig)
-#					face = faces.BarChartFace(values, colors=colors, labels=labels, min_value=0, max_value=1, width=100, height=100, label_fsize=2, scale_fsize=2)
+					#face = faces.BarChartFace(values, colors=colors, labels=labels, min_value=0, max_value=1, width=100, height=100, label_fsize=2, scale_fsize=2)
 					#faces.add_face_to_node(face, node, column=0)
 					node.add_face(face, column=0, position="branch-right")
 			line = [name, n, pval, q1, q2, q3, ILS_explain, IH_explain, ILS_index, IH_index]
@@ -381,7 +406,7 @@ Please check...'.format(self.treefile))
 		#	node.img_style["size"] = 0
 		ts = TreeStyle()
 		ts.show_leaf_name = False
-		ts.show_branch_support = True
+#		ts.show_branch_support = True
 		ts.scale_length = 1
 		# # Set bold red branch to the root node
 		style = NodeStyle()
@@ -522,7 +547,7 @@ def plot_dist(data, axs=None, outfig=None, figsize=3, bins=30, limit=97.5, **kar
 	for vals in data.values():
 		full += vals
 	xlim = np.percentile(full, limit)
-	
+	colors = COLORS[:3]
 	for key, ax, color in zip(['q1', 'q2', 'q3'], axs, colors):
 		#full += data[key]
 		#sns.displot(data[key], color=color, ax=ax)

@@ -27,6 +27,12 @@ from Bio import SeqIO
 from .RunCmdsMP import logger
 
 ISOTIMEFORMAT='%Y-%m-%d %X'
+
+def lazy_decode(line):
+	try: line = line.decode()
+	except AttributeError: pass
+	return line
+
 def mk_ckp(ckgfile, *data, log=True):
 	with open(ckgfile, 'wb') as f:
 		for dat in data:
@@ -52,6 +58,27 @@ def check_ckp(ckgfile, log=True, overwrite=False):
 				data += [dat]
 		return data
 	return False
+def tr_numeric(val):
+	try: return int(val)
+	except:
+		try: return float(val)
+		except: return val
+def parse_key_opts(args):
+	d = {}
+	pops = []
+	for i, arg in enumerate(args):
+		kv = arg.split('=', 1)
+		if len(kv) != 2:
+			continue
+		pops += [i]
+		key, val = kv
+		val = tr_numeric(val)
+		d[key] = val
+	for i in sorted(pops, reverse=1):
+		args.pop(i)
+	return d
+def parse_kargs(*args):
+	return parse_key_opts(*args)
 
 def sorted_version(lst, **kargs):
 	return sorted(lst, key=lambda x: get_version(x), **kargs)
@@ -65,6 +92,7 @@ def get_version(value):
 
 def get_hex_colors(n):
 	import matplotlib.pyplot as plt
+	plt.switch_backend('agg')
 	import matplotlib.colors as colors
 	import matplotlib.cm as cmx
 	values = list(range(n))
@@ -129,7 +157,8 @@ def mkdirs(*dirs):
 def rmdirs(*dirs):
 	for DIR in dirs:
 		if os.path.exists(DIR):
-			shutil.rmtree(DIR)
+			try: shutil.rmtree(DIR)
+			except OSError: os.remove(DIR)
 		else:
 			pass
 def cpdir(from_dir, to_dir):
@@ -140,6 +169,13 @@ def test_f(xfile):	#"test -f"
 
 def test_s(xfile):	#"test -s"
 	return os.path.exists(xfile) and os.path.getsize(xfile)>0
+def test_r(xfile): # readable
+	try: 
+		f = open(xfile)
+		f.close()
+		return True
+	except:
+		return False
 def is_complete_cds(Seq, translate_table=1):
 	'''A Bio.Seq object (CDS) is complete (both start and end codons present)?'''
 	try:

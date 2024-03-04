@@ -28,6 +28,17 @@ def makeArgparse():
 	group_in.add_argument('-g', '-genetrees', default=None, type=str, dest='genetrees',  metavar='NEWICK',
                     help="gene trees for branch lengths in TEST mode [default=%(default)s]")
 
+	# set tree
+	group_tree = parser.add_argument_group('Tree options', '')
+	group_tree.add_argument('-align', action="store_true", default=False,
+                    help="Align tips [default=%(default)s]")
+	group_tree.add_argument('-cp', '-concordance_percent', action="store_true", default=False,
+                    help="Show gene-species trees concordance percent at inner nodes instead of PP [default=%(default)s]")
+	group_tree.add_argument('-branch_size', default=48, type=float,
+                    help="Font size of text in branch [default=%(default)s]")
+	group_tree.add_argument('-leaf_size', default=60,
+                    help="Font size of leaf name [default=%(default)s]")
+
 	# set barcharts
 	group_bar = parser.add_argument_group('Barcharts options', '')
 	group_bar.add_argument('-sort', action="store_true", default=False, 
@@ -38,16 +49,23 @@ def makeArgparse():
 					help="Figure size of barcharts [default=%(default)s]")
 	group_bar.add_argument('-fontsize', default=13, type=float,
                     help="Font size of text in barcharts [default=%(default)s]")
+	group_bar.add_argument('-figfmt', default='png', type=str,
+                    help="Figure format of barcharts in tmpdir [default=%(default)s]")
+	group_bar.add_argument('-polytomy_test', action="store_true", default=False,
+                    help="Test for polytomies [default=%(default)s]")
 
 	# pie
 	group_pie = parser.add_argument_group('Piecharts options', '')
 	group_pie.add_argument('-pie', '-pie_chart', action="store_true", default=False, dest='pie',
                     help="Use piechart instead of barchart [default=%(default)s]")
-	group_pie.add_argument('-cp', '-concordance_percent', action="store_true", default=False,
-                    help="Show gene-species trees concordance percent at inner nodes instead of PP [default=%(default)s]")
-	group_pie.add_argument('-pie_leaf_size', default=11,
-                    help="Font size of leaf name [default=%(default)s]")
-	
+	group_pie.add_argument('-pie_fold', default=6,
+                    help="Fold of font size between Barcharts and Piecharts [default=%(default)s]")
+
+	# bl
+	group_bl = parser.add_argument_group('Branch length (BL) options', '')	
+	group_pie.add_argument('-bl', action="store_true", default=False, dest='add_bl',
+					help="Branch lengths to check [default=%(default)s]")
+
 	# test
 	group_test = parser.add_argument_group('Test mode', '')
 	group_test.add_argument('-test', default=None, type=str,  nargs='*', dest='test_clades',  metavar='TAXON/FILE',
