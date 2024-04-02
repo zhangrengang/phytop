@@ -58,7 +58,9 @@ def makeArgparse():
 	group_pie = parser.add_argument_group('Piecharts options', '')
 	group_pie.add_argument('-pie', '-pie_chart', action="store_true", default=False, dest='pie',
                     help="Use piechart instead of barchart [default=%(default)s]")
-	group_pie.add_argument('-pie_fold', default=6,
+	group_pie.add_argument('-pie_size', default=30, type=int, 
+                    help="Size of Piecharts [default=%(default)s]")
+	group_pie.add_argument('-pie_fold', default=6, type=int,
                     help="Fold of font size between Barcharts and Piecharts [default=%(default)s]")
 
 	# bl
