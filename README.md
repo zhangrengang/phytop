@@ -6,7 +6,7 @@ Any nodes of phylogenetic tree can be regarded as consisting of two sister group
 **Figure. The three topological structures of gene trees** Any combination of three lineages produces three topologies, When the ILS index is at its maximum of 100% and there is no IH, we expect q1 = q2 = q3 = 100%/3. When the IH index reaches 50% and there is no ILS, q1 = q2 = 50% is expected.  
 
 ### Quick install and start ###
-Download and install Phytop
+Download and install Phytop:
 ```
 git clone https://github.com/zhangrengang/phytop
 cd phytop
