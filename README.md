@@ -44,13 +44,14 @@ Get barcharts with collapse for clades:
 ```
 phytop astral.tree -clades setcladefile -collapse
 ```
-![pie](example_data/legend_forintroduce/astral.tree.bar.collepse.jpg)
+![pie](example_data/legend_forintroduce/astral.tree.bar.collepse.jpg)  
 **Figure. Visual result of Phytop on example data with collapse for clades.** Juglans	regia and Juglans	sigillata were collepse for Juglans1
 
 Get barcharts displays a selection of nodes:
 ```
 phytop astral.tree -clades setcladefile -onshow Juglans1
 ```
+![pie](example_data/legend_forintroduce/astral.tree.bar.onshow.jpg)
 **Figure. Visual result of Phytop on example data with a subset of nodes.** 
 
 Get piecharts:
