@@ -36,9 +36,9 @@ When runing ASTRAL, please use `-u 2` (for [C++ version](https://github.com/chao
 ├── *.info.tsv    # The specific value of each node
 ```
 
-The below is an example of output figures of Phytop with default parameters:
+The block diagram in PDF shows the ratio of q1, q2 and q3 of nodes. q2 and q3 are topologies that conflict with q1. Higher ILS-i or IH-i represent stronger ILS or IH respectively. In this example, there are strong ILS and IH among Juglans nigra, Juglans mandshurica, and (Juglans regia, Juglans sigillata). Since q2 is much larger than q3, we can roughly infer that there is strong IH from Juglans nigra and Juglans mandshurica to (Juglans regia, Juglans sigillata). There are almost no ILS and IH among Juglans regia, Juglans sigillata and outgroup, and this node can be considered as a well-resolved node. The below is an output figures of Phytop with default parameters:
 ![bar](example_data/legend_forintroduce/astral.tree.bar.jpg)
-**Figure. Visual result of Phytop on example data with default parameters.** n represents the number of simulated gene trees, P is the p-value of χ2 test to check whether the number of topologies q2 and q3 are equal, ILS-i and IH-i represent the calculated ILS index and IH index respectively, and ILS-e and IH-e represent the proportion of gene tree topological incongruence that can be explained by the ILS and IH, respectively.
+**Figure. Visual result of Phytop on example data with default parameters.** n represents the number of gene trees, P is the p-value of χ2 test to check whether the number of topologies q2 and q3 are equal, ILS-i and IH-i represent the calculated ILS index and IH index respectively, and ILS-e and IH-e represent the proportion of gene tree topological incongruence that can be explained by the ILS and IH, respectively.
 
 Get barcharts with collapse for clades:
 ```
@@ -53,6 +53,13 @@ phytop astral.tree -clades setcladefile -onshow Juglans1
 ```
 ![pie](example_data/legend_forintroduce/astral.tree.bar.onshow.jpg)  
 **Figure. Visual result of Phytop on example data with a subset of nodes.**  Only the information about the specified node is displayed
+
+Get barcharts displays a selection of nodes:
+```
+phytop astral.tree -clades setcladefile -noshow Juglans1
+```
+![pie](example_data/legend_forintroduce/astral.tree.bar.noshow.jpg)  
+**Figure. Visual result of Phytop on example data with specified node information not displayed.**  The information about the specified node is not displayed
 
 Get piecharts:
 ```
