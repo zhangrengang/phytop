@@ -40,7 +40,7 @@ def makeArgparse():
                     help="Font size of leaf name [default=%(default)s]")
 
 	# set barcharts
-	group_bar = parser.add_argument_group('Barcharts options', '')
+	group_bar = parser.add_argument_group('Barcharts/Piecharts options', '')
 	group_bar.add_argument('-sort', action="store_true", default=False, 
                     help="Sort q1, q2 and q3, which will miss the directionality [default=%(default)s]")
 	group_bar.add_argument('-notext', action="store_true", default=False, 
@@ -51,21 +51,23 @@ def makeArgparse():
                     help="Font size of text in barcharts [default=%(default)s]")
 	group_bar.add_argument('-figfmt', default='png', type=str,
                     help="Figure format of barcharts in tmpdir [default=%(default)s]")
+	group_bar.add_argument('-colors', default=None, type=str,
+                    help="Set colors for barcharts/piecharts [default=%(default)s]")
 	group_bar.add_argument('-polytomy_test', action="store_true", default=False,
                     help="Test for polytomies [default=%(default)s]")
 
 	# pie
-	group_pie = parser.add_argument_group('Piecharts options', '')
-	group_pie.add_argument('-pie', '-pie_chart', action="store_true", default=False, dest='pie',
+#	group_pie = parser.add_argument_group('Piecharts options', '')
+	group_bar.add_argument('-pie', '-pie_chart', action="store_true", default=False, dest='pie',
                     help="Use piechart instead of barchart [default=%(default)s]")
-	group_pie.add_argument('-pie_size', default=30, type=float, 
+	group_bar.add_argument('-pie_size', default=30, type=float, 
                     help="Size of Piecharts [default=%(default)s]")
-	group_pie.add_argument('-pie_fold', default=6, type=float,
-                    help="Fold of font size between Barcharts and Piecharts [default=%(default)s]")
+#	group_pie.add_argument('-pie_fold', default=6, type=float,
+#                    help="Fold of font size between Barcharts and Piecharts [default=%(default)s]")
 
 	# bl
 	group_bl = parser.add_argument_group('Branch length (BL) options', '')	
-	group_pie.add_argument('-bl', action="store_true", default=False, dest='add_bl',
+	group_bl.add_argument('-bl', action="store_true", default=False, dest='add_bl',
 					help="Branch lengths to check [default=%(default)s]")
 
 	# test

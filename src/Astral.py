@@ -111,7 +111,7 @@ class AstralTree:
 			clades=None, onshow=None, noshow=None, add_bl=False,
 			collapsed=None, subset=None, sort=False, notext=False,
 			test_clades=None, astral_bin='astral-pro', outgroup=None,
-			pie=False, cp=False, figfmt='png', 
+			pie=False, cp=False, figfmt='png', colors=None,
 			figsize=3, fontsize=13, 
 			branch_size=48, # fontsize of branch text
 			leaf_size=60,
@@ -156,7 +156,12 @@ class AstralTree:
 		self.polytomy_test = polytomy_test
 		if self.prefix is None:
 			self.prefix = os.path.basename(self.treefile)
-		
+		if colors is None:
+			self.colors = COLORS
+		elif isinstance(colors, str):
+			self.colors = colors.split(',')
+		else:
+			self.colors = self.colors
 	def check(self):
 		if not re.compile(r'f1=\S+f2=\S+f3=\S+').search(self.treestr):
 			#raise ValueError('Keys f1, f2 and f3 are not found in {}. \
@@ -290,7 +295,7 @@ Please check...'.format(self.treefile))
 		f_info = open(info_file, 'w')
 		line = ['node', 'n', 'p_value', 'q1', 'q2', 'q3', 'ILS_explain', 'IH_explain', 'ILS_index', 'IH_index']
 		f_info.write('\t'.join(line)+'\n')
-		_colors = COLORS[:3]
+		_colors = self.colors[:3]
 		fsize = self.leaf_size
 		for node in self.tree.traverse():
 			if node.is_leaf():
@@ -358,10 +363,10 @@ Please check...'.format(self.treefile))
 			if not self.pie:
 				if self.both_plot and self.genetrees and self.add_bl:
 					outfig = '{}/{}.{}.both.{}'.format(self.tmpdir, self.prefix, name, self.figfmt)
-					joint_plot(bardata=[q1, q2, q3], histdata=d_dist[node.name], outfig=outfig, **kargs)
+					joint_plot(bardata=[q1, q2, q3], histdata=d_dist[node.name], outfig=outfig, colors=_colors, **kargs)
 				else:
 					outfig = '{}/{}.{}.bar.{}'.format(self.tmpdir, self.prefix, name, self.figfmt)
-					values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, **kargs)
+					values, labels, colors = plot_bar([q1, q2, q3], outfig=outfig, colors=_colors, **kargs)
 					#hline=hline, text=text, 
 					#sort=self.sort, notext=self.notext, figsize=self.figsize, fontsize=self.fontsize)
 		#	outfig = '{}/{}.{}.dist.pdf'.format(self.tmpdir, self.prefix, name)
@@ -480,10 +485,20 @@ Please check...'.format(self.treefile))
 #		print(ancestor.is_leaf())
 #		print(self.tree.write())
 	def subset_tree(self, tree, leaf_names):
-		ancestor = tree.get_common_ancestor(leaf_names)
+		ancestor = tree.get_common_ancestor(self.to_leafs(tree, leaf_names))
 		keep = set(ancestor.get_leaf_names())
+#		print(ancestor, keep, dir(tree), )
 		tree.prune(keep)
-
+	def to_leafs(self, tree, taxa):
+		names = []
+		for taxon in taxa:
+			node = tree&taxon
+			if node.is_leaf():
+				taxon = [taxon]
+			else:
+				taxon = node.get_leaf_names()
+			names += taxon
+		return names
 def collapsed_leaf(node):
 	return node not in d_collapse
 
@@ -510,7 +525,7 @@ def joint_plot(bardata, histdata, outfig=None, figsize=3, **kargs):
 	plt.close()
 
 def plot_bar(qs=[1,0,0], outfig=None, ax=None, hline=None, ymax=1, text=None, sort=False, notext=False,
-		figsize=3, fontsize=14, **kargs):
+		figsize=3, fontsize=14, colors=COLORS, **kargs):
 	import matplotlib.pyplot as plt
 	import matplotlib
 	matplotlib.rcParams['ytick.minor.visible'] = True
@@ -521,7 +536,7 @@ def plot_bar(qs=[1,0,0], outfig=None, ax=None, hline=None, ymax=1, text=None, so
 #	plt.figure(figsize=(figsize, figsize))
 	x = list(range(len(qs)))
 	labs = ['q{}'.format(v+1) for v in x]
-	cs = COLORS[:len(qs)]
+	cs = colors[:len(qs)]
 	print(x, qs, hline)
 	ax.bar(x, qs, color=cs, tick_label=labs, align='center', width=0.67)
 	if hline is not None:
@@ -536,7 +551,7 @@ def plot_bar(qs=[1,0,0], outfig=None, ax=None, hline=None, ymax=1, text=None, so
 		plt.savefig(outfig, bbox_inches='tight', transparent=True, dpi=300)
 		plt.close()
 	return qs, labs, cs
-def plot_dist(data, axs=None, outfig=None, figsize=3, bins=30, limit=97.5, **kargs):
+def plot_dist(data, axs=None, outfig=None, figsize=3, bins=30, limit=97.5, colors=COLORS, **kargs):
 	import matplotlib.pyplot as plt
 #	import seaborn as sns
 #	plt.figure(figsize=(figsize, figsize))
@@ -547,7 +562,7 @@ def plot_dist(data, axs=None, outfig=None, figsize=3, bins=30, limit=97.5, **kar
 	for vals in data.values():
 		full += vals
 	xlim = np.percentile(full, limit)
-	colors = COLORS[:3]
+	colors = colors[:3]
 	for key, ax, color in zip(['q1', 'q2', 'q3'], axs, colors):
 		#full += data[key]
 		#sns.displot(data[key], color=color, ax=ax)
