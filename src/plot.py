@@ -36,7 +36,7 @@ def makeArgparse():
                     help="Show gene-species trees concordance percent at inner nodes instead of PP [default=%(default)s]")
 	group_tree.add_argument('-branch_size', default=48, type=float,
                     help="Font size of text in branch [default=%(default)s]")
-	group_tree.add_argument('-leaf_size', default=60,
+	group_tree.add_argument('-leaf_size', default=60, type=float,
                     help="Font size of leaf name [default=%(default)s]")
 
 	# set barcharts
@@ -58,9 +58,9 @@ def makeArgparse():
 	group_pie = parser.add_argument_group('Piecharts options', '')
 	group_pie.add_argument('-pie', '-pie_chart', action="store_true", default=False, dest='pie',
                     help="Use piechart instead of barchart [default=%(default)s]")
-	group_pie.add_argument('-pie_size', default=30, type=int, 
+	group_pie.add_argument('-pie_size', default=30, type=float, 
                     help="Size of Piecharts [default=%(default)s]")
-	group_pie.add_argument('-pie_fold', default=6, type=int,
+	group_pie.add_argument('-pie_fold', default=6, type=float,
                     help="Fold of font size between Barcharts and Piecharts [default=%(default)s]")
 
 	# bl
