@@ -1,6 +1,6 @@
 
 ### Introduction ###
-We defined the ILS/IH index to represent the degree of Incomplete lineage sorting (ILS) and introgression (IH) among lineages. This tool can quickly detect and visualize ILS/IH index between lineages of tree results run by ASTRAL option -u 2 or -t -2, with short running time, helping users to preliminatively determine ILS and IH and screen lineages for further analysis.For more details of ILS/IH index, please see https://www.biorxiv.org/content/10.1101/2024.09.02.610893v1.  
+We defined the ILS/IH index to represent the degree of Incomplete lineage sorting (ILS) and introgression (IH) among lineages. This tool can quickly detect and visualize ILS/IH index between lineages of tree results run by ASTRAL option -u 2 or -t -2, with short running time, helping users to preliminatively determine ILS and IH and screen lineages for further analysis.For more details of ILS/IH index, please see https://www.biorxiv.org/content/10.1101/2024.09.02.610893v1. Executable version for Windows and Linux can be downloaded at https://figshare.com/articles/dataset/phytop_executable_versions_in_windows_and_linux/27276699
 Any nodes of phylogenetic tree can be regarded as consisting of two sister groups and one outgroup, and these three lineages can form three topologies q1, q2, q3 (as shown in the figure below),The topology with the highest proportion is denoted as q1. ILS/IH index is calculated based on the number and proportion of these topologies.  
 ![q123](example_data/legend_forintroduce/q123.png)
 **Figure. The three topological structures of gene trees** Any combination of three lineages produces three topologies, When the ILS index is at its maximum of 100% and there is no IH, we expect q1 = q2 = q3 = 100%/3. When the IH index reaches 50% and there is no ILS, q1 = q2 = 50% is expected.  
@@ -124,6 +124,13 @@ phytop astral.tree -clades setcladefile -collapse
 ```
 ![pie](example_data/legend_forintroduce/astral.tree.bar.collepse-1.png)  
 **Figure. Visual result of Phytop on example data with collapse for clades.** Juglans	regia and Juglans	sigillata were collepse for Juglans1
+
+Get barcharts with different colors:
+```
+phytop sog.sc.cds.mm0.5.genetrees.astral -colors 'red','yellow','black'
+```
+![pie](example_data/legend_forintroduce/astral.tree-colors-red,yellow,black-1.png)  
+**Figure. Visual result of Phytop on example data with "-colors" parameter.** Set the columns to different colors
 
 Get barcharts displays a selection of nodes:
 ```
