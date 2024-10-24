@@ -126,6 +126,7 @@ Output:
 ```
 
 Visual parameters for adjusting graph output:
+
 1.Get barcharts with different colors:
 ```
 phytop astral.tree -colors red,yellow,black
@@ -175,7 +176,8 @@ phytop astral.tree -clades setcladefile -noshow Juglans1
 ![pie](example_data/legend_forintroduce/astral.tree.bar.noshow-1.png)  
 **Figure. Visual result of Phytop on example data with specified node information not displayed.**  The information about the specified node is not displayed
 
-Visual parameters for adjusting fonts
+Visual parameters for adjusting fonts:
+
 1.Adjust the leaf size
 ```
 phytop astral.tree -leaf_size 20
@@ -198,6 +200,7 @@ phytop astral.tree -notext
 **Figure. Visual result of Phytop on example data with "-notext" parameter.** Use this parameter to make the text of the barplots not display.
 
 Visual parameters for adjusting clades:
+
 1.Customizing the location of lineages:
 ```
 phytop astral.tree -align
