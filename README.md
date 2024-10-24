@@ -1,12 +1,19 @@
 
 ### Introduction ###
-We defined the ILS/IH index to represent the degree of Incomplete lineage sorting (ILS) and introgression (IH) among lineages. This tool can quickly detect and visualize ILS/IH index between lineages of tree results run by ASTRAL option -u 2 or -t -2, with short running time, helping users to preliminatively determine ILS and IH and screen lineages for further analysis.For more details of ILS/IH index, please see https://www.biorxiv.org/content/10.1101/2024.09.02.610893v1. Executable version for Windows and Linux can be downloaded at https://figshare.com/articles/dataset/phytop_executable_versions_in_windows_and_linux/27276699
+We defined the ILS/IH index to represent the degree of Incomplete lineage sorting (ILS) and introgression (IH) among lineages. This tool can quickly detect and visualize ILS/IH index between lineages of tree results run by ASTRAL option -u 2 or -t -2, with short running time, helping users to preliminatively determine ILS and IH and screen lineages for further analysis.For more details of ILS/IH index, please see https://www.biorxiv.org/content/10.1101/2024.09.02.610893v1.
 Any nodes of phylogenetic tree can be regarded as consisting of two sister groups and one outgroup, and these three lineages can form three topologies q1, q2, q3 (as shown in the figure below),The topology with the highest proportion is denoted as q1. ILS/IH index is calculated based on the number and proportion of these topologies.  
 ![q123](example_data/legend_forintroduce/q123.png)
 **Figure. The three topological structures of gene trees** Any combination of three lineages produces three topologies, When the ILS index is at its maximum of 100% and there is no IH, we expect q1 = q2 = q3 = 100%/3. When the IH index reaches 50% and there is no ILS, q1 = q2 = 50% is expected.  
 
 ### Quick install and start ###
-Download and install Phytop:
+Executable version for Windows and Linux can be downloaded at https://figshare.com/articles/dataset/phytop_executable_versions_in_windows_and_linux/27276699
+```
+# run help for the executable version for Windows
+phytop.exe -h
+# run help for the executable version for Linux
+phytop_linux -h
+```
+Download and install Phytop in Linux:
 ```
 git clone https://github.com/zhangrengang/phytop
 cd phytop
@@ -118,80 +125,89 @@ Output:
                         Temporary directory [default=tmp]
 ```
 
-Get barcharts with collapse for clades:
+Visual parameters for adjusting graph output:
+1.Get barcharts with different colors:
 ```
-phytop astral.tree -clades setcladefile -collapse
-```
-![pie](example_data/legend_forintroduce/astral.tree.bar.collepse-1.png)  
-**Figure. Visual result of Phytop on example data with collapse for clades.** Juglans	regia and Juglans	sigillata were collepse for Juglans1
-
-Get barcharts with different colors:
-```
-phytop sog.sc.cds.mm0.5.genetrees.astral -colors 'red','yellow','black'
+phytop astral.tree -colors red,yellow,black
 ```
 ![pie](example_data/legend_forintroduce/astral.tree-colors-red,yellow,black-1.png)  
 **Figure. Visual result of Phytop on example data with "-colors" parameter.** Set the columns to different colors
 
-Get barcharts displays a selection of nodes:
-```
-phytop astral.tree -clades setcladefile -onshow Juglans1
-```
-![pie](example_data/legend_forintroduce/astral.tree.bar.onshow-1.png)  
-**Figure. Visual result of Phytop on example data with a subset of nodes.**  Only the information about the specified node is displayed
-
-Get barcharts displays a selection of nodes:
-```
-phytop astral.tree -clades setcladefile -noshow Juglans1
-```
-![pie](example_data/legend_forintroduce/astral.tree.bar.noshow-1.png)  
-**Figure. Visual result of Phytop on example data with specified node information not displayed.**  The information about the specified node is not displayed
-
-Get piecharts:
-```
-phytop astral.tree -pie -cp
-```
-![pie](example_data/legend_forintroduce/astral.tree.pie-1.png)  
-**Figure. Visual result of Phytop on example data with "-pie -cp" parameters.** In the pie chart, only the proportions of the q1 topologies are shown
-
-Customizing the visualization output:
-```
-phytop astral.tree -align
-```
-![pie](example_data/legend_forintroduce/astral.tree_align-1.png)  
-**Figure. Visual result of Phytop on example data with "-align" parameter.** This parameter can be used to make leaf names aligned.
-
-```
-phytop astral.tree -subset Juglans_nigra Juglans_sigillata Juglans_regia
-```
-![pie](example_data/legend_forintroduce/astral.tree-subset_Juglans_nigraJuglans_sigillataJuglans_regia-1.png)  
-**Figure. Visual result of Phytop on example data with "-branchsize" parameter. "-branchsize 20" in this example.** This parameter can be used to select subset of leaves.
-
-```
-phytop astral.tree -branch_size 20
-```
-![pie](example_data/legend_forintroduce/astral.tree_branchsize20-1.png)  
-**Figure. Visual result of Phytop on example data with "-branch_size" parameter. "-branch_size 20" in this example.** This parameter can be used to adjust font size of text in branch.
-
-```
-phytop astral.tree -notext
-```
-![pie](example_data/legend_forintroduce/astral.tree_notext-1.png)  
-**Figure. Visual result of Phytop on example data with "-notext" parameter.** Use this parameter to make the text of the barplots not display.
-
+2.Resize barplot and text
 ```
 phytop astral.tree -figsize 1 -fontsize 4
 ```
 ![pie](example_data/legend_forintroduce/astral.tree-figsize1-fontsize4-1.png)  
 **Figure. Visual result of Phytop on example data with "-figsize" and "-fontsize" parameters. "-figsize 1 -fontsize 4" in this example.** These parameters can be used to adjust the image size and font size of the barplots.
 
+3.Get piecharts:
+```
+phytop astral.tree -pie -cp
+```
+![pie](example_data/legend_forintroduce/astral.tree.pie-1.png)  
+**Figure. Visual result of Phytop on example data with "-pie -cp" parameters.** In the pie chart, only the proportions of the q1 topologies are shown
+
+4.Resize the pieplot size
+```
+phytop astral.tree -pie -pie_size 20
+```
+![pie](example_data/legend_forintroduce/astral.tree-pie-pie_size20-1.png)  
+**Figure. Visual result of Phytop on example data with "-pie_size". "-pie -pie_size 20" in this example.** This parameter can be used to adjust font size of of piecharts.
+
+5.Get barcharts with collapse for clades:
+```
+phytop astral.tree -clades setcladefile -collapse
+```
+![pie](example_data/legend_forintroduce/astral.tree.bar.collepse-1.png)  
+**Figure. Visual result of Phytop on example data with collapse for clades.** Juglans	regia and Juglans	sigillata were collepse for Juglans1
+
+6.Get barcharts displays a selection of nodes:
+```
+phytop astral.tree -clades setcladefile -onshow Juglans1
+```
+![pie](example_data/legend_forintroduce/astral.tree.bar.onshow-1.png)  
+**Figure. Visual result of Phytop on example data with a subset of nodes.**  Only the information about the specified node is displayed
+
+7.Get barcharts displays a selection of nodes:
+```
+phytop astral.tree -clades setcladefile -noshow Juglans1
+```
+![pie](example_data/legend_forintroduce/astral.tree.bar.noshow-1.png)  
+**Figure. Visual result of Phytop on example data with specified node information not displayed.**  The information about the specified node is not displayed
+
+Visual parameters for adjusting fonts
+1.Adjust the leaf size
 ```
 phytop astral.tree -leaf_size 20
 ```
 ![pie](example_data/legend_forintroduce/astral.tree-leaf_size20-1.png)  
 **Figure. Visual result of Phytop on example data with "-leaf_size". "-leaf_size 20" in this example.** This parameter can be used to adjust font size of font size of leaf names.
 
+2.Adjust the font size of branch size
 ```
-phytop astral.tree -pie -pie_size 20
+phytop astral.tree -branch_size 20
 ```
-![pie](example_data/legend_forintroduce/astral.tree-pie-pie_size20-1.png)  
-**Figure. Visual result of Phytop on example data with "-pie_size". "-pie -pie_size 20" in this example.** This parameter can be used to adjust font size of of piecharts.
+![pie](example_data/legend_forintroduce/astral.tree_branchsize20-1.png)  
+**Figure. Visual result of Phytop on example data with "-branch_size" parameter. "-branch_size 20" in this example.** This parameter can be used to adjust font size of text in branch.
+
+3.Make barplot not display text
+```
+phytop astral.tree -notext
+```
+![pie](example_data/legend_forintroduce/astral.tree_notext-1.png)  
+**Figure. Visual result of Phytop on example data with "-notext" parameter.** Use this parameter to make the text of the barplots not display.
+
+Visual parameters for adjusting clades:
+1.Customizing the location of lineages:
+```
+phytop astral.tree -align
+```
+![pie](example_data/legend_forintroduce/astral.tree_align-1.png)  
+**Figure. Visual result of Phytop on example data with "-align" parameter.** This parameter can be used to make leaf names aligned.
+
+2.Select part of the lineages to show
+```
+phytop astral.tree -subset Juglans_nigra Juglans_sigillata Juglans_regia
+```
+![pie](example_data/legend_forintroduce/astral.tree-subset_Juglans_nigraJuglans_sigillataJuglans_regia-1.png)  
+**Figure. Visual result of Phytop on example data with "-branchsize" parameter. "-branchsize 20" in this example.** This parameter can be used to select subset of leaves.
