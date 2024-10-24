@@ -134,42 +134,42 @@ phytop astral.tree -colors red,yellow,black
 ![pie](example_data/legend_forintroduce/astral.tree-colors-red,yellow,black-1.png)  
 **Figure. Visual result of Phytop on example data with "-colors" parameter.** Set the columns to different colors
 
-2.Resize barplot and text:
+2\. Resize barplot and text:
 ```
 phytop astral.tree -figsize 1 -fontsize 4
 ```
 ![pie](example_data/legend_forintroduce/astral.tree-figsize1-fontsize4-1.png)  
 **Figure. Visual result of Phytop on example data with "-figsize" and "-fontsize" parameters. "-figsize 1 -fontsize 4" in this example.** These parameters can be used to adjust the image size and font size of the barplots.
 
-3.Get piecharts:
+3\. Get piecharts:
 ```
 phytop astral.tree -pie -cp
 ```
 ![pie](example_data/legend_forintroduce/astral.tree.pie-1.png)  
 **Figure. Visual result of Phytop on example data with "-pie -cp" parameters.** In the pie chart, only the proportions of the q1 topologies are shown
 
-4.Resize the pieplot size:
+4\. Resize the pieplot size:
 ```
 phytop astral.tree -pie -pie_size 20
 ```
 ![pie](example_data/legend_forintroduce/astral.tree-pie-pie_size20-1.png)  
 **Figure. Visual result of Phytop on example data with "-pie_size". "-pie -pie_size 20" in this example.** This parameter can be used to adjust font size of of piecharts.
 
-5.Get barcharts with collapse for clades:
+5\. Get barcharts with collapse for clades:
 ```
 phytop astral.tree -clades setcladefile -collapse
 ```
 ![pie](example_data/legend_forintroduce/astral.tree.bar.collepse-1.png)  
 **Figure. Visual result of Phytop on example data with collapse for clades.** Juglans	regia and Juglans	sigillata were collepse for Juglans1
 
-6.Get barcharts displays a selection of nodes:
+6\. Get barcharts displays a selection of nodes:
 ```
 phytop astral.tree -clades setcladefile -onshow Juglans1
 ```
 ![pie](example_data/legend_forintroduce/astral.tree.bar.onshow-1.png)  
 **Figure. Visual result of Phytop on example data with a subset of nodes.**  Only the information about the specified node is displayed
 
-7.Get barcharts displays a selection of nodes:
+7\. Get barcharts displays a selection of nodes:
 ```
 phytop astral.tree -clades setcladefile -noshow Juglans1
 ```
@@ -178,21 +178,21 @@ phytop astral.tree -clades setcladefile -noshow Juglans1
 
 Visual parameters for adjusting fonts:
 
-1.Adjust the leaf size:
+1\. Adjust the leaf size:
 ```
 phytop astral.tree -leaf_size 20
 ```
 ![pie](example_data/legend_forintroduce/astral.tree-leaf_size20-1.png)  
 **Figure. Visual result of Phytop on example data with "-leaf_size". "-leaf_size 20" in this example.** This parameter can be used to adjust font size of font size of leaf names.
 
-2.Adjust the font size of branch size:
+2\. Adjust the font size of branch size:
 ```
 phytop astral.tree -branch_size 20
 ```
 ![pie](example_data/legend_forintroduce/astral.tree_branchsize20-1.png)  
 **Figure. Visual result of Phytop on example data with "-branch_size" parameter. "-branch_size 20" in this example.** This parameter can be used to adjust font size of text in branch.
 
-3.Make barplot not display text:
+3\. Make barplot not display text:
 ```
 phytop astral.tree -notext
 ```
@@ -201,14 +201,14 @@ phytop astral.tree -notext
 
 Visual parameters for adjusting clades:
 
-1.Customizing the location of lineages:
+1\. Customizing the location of lineages:
 ```
 phytop astral.tree -align
 ```
 ![pie](example_data/legend_forintroduce/astral.tree_align-1.png)  
 **Figure. Visual result of Phytop on example data with "-align" parameter.** This parameter can be used to make leaf names aligned.
 
-2.Select part of the lineages to show:
+2\. Select part of the lineages to show:
 ```
 phytop astral.tree -subset Juglans_nigra Juglans_sigillata Juglans_regia
 ```
