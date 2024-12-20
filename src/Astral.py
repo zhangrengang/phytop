@@ -9,7 +9,7 @@ from ete3.coretype.tree import TreeError
 from scipy.stats import chi2
 from .RunCmdsMP import logger, run_cmd
 from .small_tools import mk_ckp, check_ckp
-os.environ['QT_QPA_PLATFORM='] = 'offscreen'
+#os.environ['QT_QPA_PLATFORM='] = 'offscreen'
 
 COLORS = ('#1f77b4', '#ff7f0e', '#2ca02c', '#d62728')
 
