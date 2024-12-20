@@ -9,6 +9,7 @@ from ete3.coretype.tree import TreeError
 from scipy.stats import chi2
 from .RunCmdsMP import logger, run_cmd
 from .small_tools import mk_ckp, check_ckp
+os.environ['QT_QPA_PLATFORM='] = 'offscreen'
 
 COLORS = ('#1f77b4', '#ff7f0e', '#2ca02c', '#d62728')
 
@@ -537,7 +538,7 @@ def plot_bar(qs=[1,0,0], outfig=None, ax=None, hline=None, ymax=1, text=None, so
 	x = list(range(len(qs)))
 	labs = ['q{}'.format(v+1) for v in x]
 	cs = colors[:len(qs)]
-	print(x, qs, hline)
+#	print(x, qs, hline)
 	ax.bar(x, qs, color=cs, tick_label=labs, align='center', width=0.67)
 	if hline is not None:
 		ax.axhline(y=hline, color='gray', ls='--')
