@@ -1,6 +1,6 @@
 
 ### Introduction ###
-We defined the ILS/IH index to represent the degree of Incomplete lineage sorting (ILS) and introgression (IH) among lineages. This tool can quickly detect and visualize ILS/IH index between lineages of tree results run by ASTRAL option -u 2 or -t -2, with short running time, helping users to preliminatively determine ILS and IH and screen lineages for further analysis.For more details of ILS/IH index, please see https://www.biorxiv.org/content/10.1101/2024.09.02.610893v1.
+We defined the ILS/IH index to represent the degree of Incomplete lineage sorting (ILS) and introgression (IH) among lineages. This tool can quickly detect and visualize ILS/IH index between lineages of tree results run by ASTRAL option -u 2 or -t -2, with short running time, helping users to preliminatively determine ILS and IH and screen lineages for further analysis. For more details of ILS/IH index, please see https://doi.org/10.1093/hr/uhae330.
 Any nodes of phylogenetic tree can be regarded as consisting of two sister groups and one outgroup, and these three lineages can form three topologies q1, q2, q3 (as shown in the figure below),The topology with the highest proportion is denoted as q1. ILS/IH index is calculated based on the number and proportion of these topologies.  
 ![q123](example_data/legend_forintroduce/q123.png)
 **Figure. The three topological structures of gene trees** Any combination of three lineages produces three topologies, When the ILS index is at its maximum of 100% and there is no IH, we expect q1 = q2 = q3 = 100%/3. When the IH index reaches 50% and there is no ILS, q1 = q2 = 50% is expected.  
@@ -214,3 +214,11 @@ phytop astral.tree -subset Juglans_nigra Juglans_sigillata Juglans_regia
 ```
 ![pie](example_data/legend_forintroduce/astral.tree-subset_Juglans_nigraJuglans_sigillataJuglans_regia-1.png)  
 **Figure. Visual result of Phytop on example data with "-branchsize" parameter. "-branchsize 20" in this example.** This parameter can be used to select subset of leaves.
+
+### Citation ###
+
+Please cite the following article if you use Phytop in your research:
+  * Hong-Yun Shang, Kai-Hua Jia, Nai-Wei Li, Min-Jie Zhou, Hao Yang, Xiao-Ling Tian, Yong-Peng Ma, Ren-Gang Zhang, Phytop: A tool for visualizing and recognizing signals of incomplete lineage sorting and hybridization using species trees output from ASTRAL, Horticulture Research, 2024;, uhae330, https://doi.org/10.1093/hr/uhae330
+
+if you use ASTRAL-Pro 2, please cite the following.:
+  * Chao Zhang, Siavash Mirarab, ASTRAL-Pro 2: ultrafast species tree reconstruction from multi-copy gene family trees, Bioinformatics, Volume 38, Issue 21, 1 November 2022, Pages 4949–4950, https://doi.org/10.1093/bioinformatics/btac620
