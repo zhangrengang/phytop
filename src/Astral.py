@@ -228,6 +228,12 @@ Please check...'.format(self.treefile))
 				except TreeError as e: raise TreeError('{} {}'.format(name, e))
 				names = names | set(ancestor.get_leaf_names())
 		return names
+	def auto_scale(self, tree):
+		leaves = tree.get_leaves()
+		common_ancestor = tree.get_common_ancestor(leaves)
+		distances = [tree.get_distance(common_ancestor, leaf) for leaf in leaves]
+		max_dist = max(distances)
+		return float("%.1g" % (max_dist * 0.1))
 	def test(self):
 		self.alter = None
 		prefix0 = self.prefix
@@ -413,7 +419,7 @@ Please check...'.format(self.treefile))
 		ts = TreeStyle()
 		ts.show_leaf_name = False
 #		ts.show_branch_support = True
-		ts.scale_length = 1
+		ts.scale_length = 1 #self.auto_scale(self.tree) #1
 		# # Set bold red branch to the root node
 		style = NodeStyle()
 		style["fgcolor"] = "#0f0f0f"
