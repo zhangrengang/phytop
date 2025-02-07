@@ -431,7 +431,16 @@ Please check...'.format(self.treefile))
 
 		outfig = self.prefix + '.pdf'
 		logger.info('Final plot: `{}`'.format(outfig))
-		self.tree.render(outfig, w=1000, tree_style=ts, dpi=300)
+#		print(dir(self.tree))
+		try: self.tree.render(outfig, w=1000, tree_style=ts, dpi=300)
+		except ValueError as e: # ValueError: Custom scale bar length
+			#print(dir(e))
+			logger.warn(e)
+			max_length = float(str(e).split()[-1])
+			ts.scale_length = float("%.1g" % (max_length * 0.1))
+			logger.info('Automatically reset the TreeStyle.scale_length to {}.'.format(ts.scale_length))
+			self.tree.render(outfig, w=1000, tree_style=ts, dpi=300)
+
 	def parse_clades(self, cfg):
 		d_clades = OrderedDict()
 		if not cfg:
