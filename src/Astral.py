@@ -142,16 +142,20 @@ class AstralTree:
 		self.sort = sort	# sort q1,q2,q3 or not
 		self.notext = notext # draw text or not
 		self.figsize = figsize	# barcharts
-		self.fontsize = fontsize	# barcharts text
-		self.branch_size = branch_size
+		self.fontsize = fontsize	# barcharts text size
+		self.branch_size = branch_size	# brach text size
 		self.figfmt = figfmt
 		self.both_plot = both_plot # plot both histogram and barcharts
 		self.pie = pie
 		self.cp = cp
-		self.leaf_size = leaf_size
+		self.leaf_size = leaf_size	# leaf text size
 		if self.pie:
 			self.leaf_size = self.leaf_size / pie_fold
 			self.branch_size = self.branch_size / pie_fold
+		self.leaf_size = int(self.leaf_size)	# for QFont
+		self.branch_size = int(self.branch_size)
+		self.fontsize = int(self.fontsize)
+
 		self.pie_size = pie_size
 		self.align = align
 		self.polytomy_test = polytomy_test

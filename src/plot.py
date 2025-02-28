@@ -34,9 +34,9 @@ def makeArgparse():
                     help="Align tips [default=%(default)s]")
 	group_tree.add_argument('-cp', '-concordance_percent', action="store_true", default=False,
                     help="Show gene-species trees concordance percent at inner nodes instead of PP [default=%(default)s]")
-	group_tree.add_argument('-branch_size', default=48, type=float,
+	group_tree.add_argument('-branch_size', default=48, type=int,
                     help="Font size of text in branch [default=%(default)s]")
-	group_tree.add_argument('-leaf_size', default=60, type=float,
+	group_tree.add_argument('-leaf_size', default=60, type=int,
                     help="Font size of leaf name [default=%(default)s]")
 
 	# set barcharts
@@ -47,7 +47,7 @@ def makeArgparse():
                     help="Do not draw text on the barcharts [default=%(default)s]")
 	group_bar.add_argument('-figsize', default=3, type=float, 
 					help="Figure size of barcharts [default=%(default)s]")
-	group_bar.add_argument('-fontsize', default=13, type=float,
+	group_bar.add_argument('-fontsize', default=13, type=int,
                     help="Font size of text in barcharts [default=%(default)s]")
 	group_bar.add_argument('-figfmt', default='png', type=str,
                     help="Figure format of barcharts in tmpdir [default=%(default)s]")
