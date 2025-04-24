@@ -45,7 +45,7 @@ When runing ASTRAL, please use `-u 2` (for [C++ version](https://github.com/chao
 
 The block diagram in PDF shows the ratio of q1, q2 and q3 of nodes. q2 and q3 are topologies that conflict with q1. Higher ILS-i or IH-i represent stronger ILS or IH respectively. In this example, there are strong ILS and IH among Juglans nigra, Juglans mandshurica, and (Juglans regia, Juglans sigillata). Since q2 is much larger than q3, we can roughly infer that there is strong IH from Juglans nigra and Juglans mandshurica to (Juglans regia, Juglans sigillata). There are almost no ILS and IH among Juglans regia, Juglans sigillata and outgroup, and this node can be considered as a well-resolved node. The below is an output figures of Phytop with default parameters:
 ![bar](example_data/legend_forintroduce/astral.tree.bar-1.png)
-**Figure. Visual result of Phytop on example data with default parameters.** n represents the number of gene trees, P is the p-value of χ2 test to check whether the number of topologies q2 and q3 are equal, ILS-i and IH-i represent the calculated ILS index and IH index respectively, and ILS-e and IH-e represent the proportion of gene tree topological incongruence that can be explained by the ILS and IH, respectively.
+**Figure. Visual result of Phytop on example data with default parameters.** n represents the number of gene trees, P is the p-value of χ2 test to check whether the number of topologies q2 and q3 are equal, ILS-i and IH-i represent the calculated ILS index and IH index respectively, and ILS-e and IH-e represent the proportion of gene tree topological incongruence that can be explained by the ILS and IH, respectively. Numbers below the branches represent the local posterior probabilities calculated in ASTRAL.
 
 
 ### Usage ###
@@ -146,14 +146,14 @@ phytop astral.tree -figsize 1 -fontsize 4
 phytop astral.tree -pie -cp
 ```
 ![pie](example_data/legend_forintroduce/astral.tree.pie-1.png)  
-**Figure. Visual result of Phytop on example data with "-pie -cp" parameters.** In the pie chart, only the proportions of the q1 topologies are shown
+**Figure. Visual result of Phytop on example data with "-pie -cp" parameters.** In the pie chart, only the proportions of the q1 topologies are shown above the branches, numbers below the branches represent the local posterior probabilities calculated in ASTRAL.
 
 4\. Resize the pieplot size:
 ```
 phytop astral.tree -pie -pie_size 20
 ```
 ![pie](example_data/legend_forintroduce/astral.tree-pie-pie_size20-1.png)  
-**Figure. Visual result of Phytop on example data with "-pie_size". "-pie -pie_size 20" in this example.** This parameter can be used to adjust font size of of piecharts.
+**Figure. Visual result of Phytop on example data with "-pie_size". "-pie -pie_size 20" in this example.** This parameter can be used to adjust font size of of piecharts. Numbers below the branches represent the local posterior probabilities calculated in ASTRAL.
 
 5\. Get barcharts with collapse for clades:
 ```
