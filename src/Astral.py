@@ -88,10 +88,12 @@ class BL:
 		return d_qdist
 
 def convertNHX(inNwk, ):
+	'''input format:
+((((Juglans_regia,Juglans_sigillata)'[pp1=1.000000;pp2=0.000000;pp3=0.000000;f1=16289.583010;f2=128.942346;f3=107.734103;q1=0.985679;q2=0.007802;q3=0.006519]':3.836391,Juglans_nigra)'[pp1=1.000000;pp2=0.000000;pp3=0.000000;f1=6476.276988;f2=5586.541891;f3=2337.777784;q1=0.449723;q2=0.387938;q3=0.162339]':0.191811,Juglans_mandshurica),Carya_illinoinensis);'''
 	def convert(line):
 		last_end = 0
 		patterns = []
-		for match in re.compile(r"'\[(\S+?)\]':(\d+\.?\d*)").finditer(line):
+		for match in re.compile(r"'\[(\S+?)\]':(\d+\.?\d*e?\-?\d*)").finditer(line):
 			start = match.start()
 			end = match.end()
 			patterns.append( line[last_end:start] )
@@ -122,6 +124,7 @@ class AstralTree:
 			):
 		self.treefile = astral
 		self.treestr = convertNHX(self.treefile)
+		#print(self.treestr)
 		self.tree = Tree(self.treestr)
 		self.max_pval = max_pval
 		self.tmpdir = tmpdir
@@ -320,7 +323,10 @@ Please check...'.format(self.treefile))
 				continue
 			try:
 				f1, f2, f3 = node.f1, node.f2, node.f3
-			except AttributeError: continue
+			except AttributeError: 
+				try: # caster
+					f1, f2, f3 = node.s1, node.s2, node.s3
+				except AttributeError: continue
 			f1, f2, f3 = map(float, [f1, f2, f3])
 			n = sum([f1, f2, f3])
 			if n == 0:
@@ -387,7 +393,7 @@ Please check...'.format(self.treefile))
 					cp = '{:.0f}'.format(max(q1, q2, q3)*100)
 					concord_text = faces.TextFace(cp, fsize=self.branch_size)
 					node.add_face(concord_text, column=0, position = "branch-top")
-				pp = '{:.0f}'.format(pp*1e2)
+				#pp = '{:.0f}'.format(pp*1e2)
 				support_text = faces.TextFace(pp, fsize=self.branch_size)
 				if not node.is_root():
 					node.add_face(support_text, column=0, position = "branch-bottom")
