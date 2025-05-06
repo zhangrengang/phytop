@@ -171,7 +171,7 @@ class AstralTree:
 		else:
 			self.colors = self.colors
 	def check(self):
-		if not re.compile(r'f1=\S+f2=\S+f3=\S+').search(self.treestr):
+		if not re.compile(r'[sf]1=\S+;[sf]2=\S+;[sf]3=\S+').search(self.treestr):
 			#raise ValueError('Keys f1, f2 and f3 are not found in {}. \
 #Please check...'.format(self.treefile))
 			logger.warn('Keys f1, f2 and f3 are not found in {}. \
