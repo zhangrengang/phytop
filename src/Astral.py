@@ -6,7 +6,7 @@ import numpy as np
 from collections import OrderedDict
 from ete3 import Tree, TreeStyle, AttrFace, NodeStyle, ImgFace, faces
 from ete3.coretype.tree import TreeError
-from scipy.stats import chi2
+from scipy.stats import chi2, chi2_contingency
 from .RunCmdsMP import logger, run_cmd
 from .small_tools import mk_ckp, check_ckp
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
@@ -108,9 +108,36 @@ def convertNHX(inNwk, ):
 		nwk += [convert(line)]
 	return ''.join(nwk)
 
+def fisher_2x3(observed, expected, n_sim=10000):
+	'''Fisher-Freeman-Halton exact test for 2x3 table via Monte Carlo.
+	observed, expected: lists of 3 values [f1, f2, f3], [ef1, ef2, ef3]
+	'''
+	import numpy as np
+	from scipy.stats import chi2_contingency
+	table = [observed, expected]
+	try:
+		res = chi2_contingency(table, correction=False)
+		obs_chi2 = res.statistic
+	except: return 1.0
+	total = sum(observed) + sum(expected)
+	p_row = np.array([sum(observed)/total, sum(expected)/total])
+	p_col = np.array([(observed[0]+expected[0])/total,
+	                  (observed[1]+expected[1])/total,
+	                  (observed[2]+expected[2])/total])
+	exp_table = np.outer(p_row, p_col) * total
+	rng = np.random.default_rng()
+	count = 0
+	for _ in range(n_sim):
+		sim = rng.multinomial(int(total/2), p_col, size=2)
+		sim_chi2 = ((sim - exp_table)**2 / exp_table).sum()
+		if sim_chi2 >= obs_chi2:
+			count += 1
+	return count / n_sim
+
+
 class AstralTree:
 	def __init__(self, astral, alter=None, genetrees=None, 
-			max_pval=0.05, tmpdir='tmp', prefix=None, both_plot=True,
+			max_pval=0.05, test_method='chi2', tmpdir='tmp', prefix=None, both_plot=True,
 			clades=None, onshow=None, noshow=None, add_bl=False,
 			collapsed=None, subset=None, sort=False, notext=False,
 			test_clades=None, astral_bin='astral-pro', outgroup=None,
@@ -127,6 +154,7 @@ class AstralTree:
 		#print(self.treestr)
 		self.tree = Tree(self.treestr)
 		self.max_pval = max_pval
+		self.test_method = test_method
 		self.tmpdir = tmpdir
 		self.prefix = prefix
 		self.clades = self.parse_clades(clades)
@@ -340,9 +368,12 @@ Please check...'.format(self.treefile))
 			if self.polytomy_test:
 				eq1 = eq2 = eq3 = 1.0/3
 			ef1, ef2, ef3 = n*eq1, n*eq2, n*eq3
-			try: chi_sq = (ef1-f1)**2/ef1 + (ef2-f2)**2/ef2 + (ef3-f3)**2/ef3
-			except ZeroDivisionError: chi_sq = 0
-			pval = 1-chi2.cdf(chi_sq, 1)
+			if self.test_method == 'fisher':
+				pval = fisher_2x3([f1, f2, f3], [ef1, ef2, ef3])
+			else:
+				try: chi_sq = (ef1-f1)**2/ef1 + (ef2-f2)**2/ef2 + (ef3-f3)**2/ef3
+				except ZeroDivisionError: chi_sq = 0
+				pval = 1-chi2.cdf(chi_sq, 1)
 			if pval > self.max_pval: # ILS
 				IH_index = 0
 				IH_explain = 0
@@ -356,8 +387,8 @@ Please check...'.format(self.treefile))
 				ILS_index = xq3
 				ILS_explain = xq3*2
 				hline = xq3
-		#	hline = math.exp(-coalescent_unit) / 3 # expected
-		#	hline = (1-q1) / 2
+			#	hline = math.exp(-coalescent_unit) / 3 # expected
+			#	hline = (1-q1) / 2
 			ILS_index = ILS_index / (1.0/3)
 			IH_index = IH_index
 			print(hline, pval, i, f1, f2, f3, n, [q1, q2, q3])
@@ -393,7 +424,7 @@ Please check...'.format(self.treefile))
 					cp = '{:.0f}'.format(max(q1, q2, q3)*100)
 					concord_text = faces.TextFace(cp, fsize=self.branch_size)
 					node.add_face(concord_text, column=0, position = "branch-top")
-				#pp = '{:.0f}'.format(pp*1e2)
+				pp = '{:.0f}'.format(pp*1e2) if pp <= 1 else pp
 				support_text = faces.TextFace(pp, fsize=self.branch_size)
 				if not node.is_root():
 					node.add_face(support_text, column=0, position = "branch-bottom")
