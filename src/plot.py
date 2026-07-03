@@ -55,6 +55,10 @@ def makeArgparse():
                     help="Set colors for barcharts/piecharts [default=%(default)s]")
 	group_bar.add_argument('-polytomy_test', action="store_true", default=False,
                     help="Test for polytomies [default=%(default)s]")
+	group_bar.add_argument('-max_pval', default=0.05, type=float,
+                    help="Significance threshold for ILS test [default=%(default)s]")
+	group_bar.add_argument('-test_method', default='chi2', type=str, choices=['chi2', 'fisher'],
+                    help="Test method: chi2 or fisher (for small gene counts) [default=%(default)s]")
 
 	# pie
 #	group_pie = parser.add_argument_group('Piecharts options', '')
