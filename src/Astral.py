@@ -90,10 +90,52 @@ class BL:
 def convertNHX(inNwk, ):
 	'''input format:
 ((((Juglans_regia,Juglans_sigillata)'[pp1=1.000000;pp2=0.000000;pp3=0.000000;f1=16289.583010;f2=128.942346;f3=107.734103;q1=0.985679;q2=0.007802;q3=0.006519]':3.836391,Juglans_nigra)'[pp1=1.000000;pp2=0.000000;pp3=0.000000;f1=6476.276988;f2=5586.541891;f3=2337.777784;q1=0.449723;q2=0.387938;q3=0.162339]':0.191811,Juglans_mandshurica),Carya_illinoinensis);'''
+	def _move_independent(s):
+		'''把独立注释项 (A:1,'[...]':len,B:2) 移到标准位置 -> (A:1,B:2):len[&&NHX:...]
+		独立项特征：注释项前面不是 ')'（即不是标准格式）'''
+		pat = re.compile(r"('[^']*'):(\d+\.?\d*[eE]?[-+]?\d*)")
+		changed = True
+		while changed:
+			changed = False
+			for m in pat.finditer(s):
+				start, end = m.start(), m.end()
+				prev = s[start-1] if start > 0 else ''
+				if prev == ')':
+					continue	# 标准格式，跳过
+				annotation, length = m.groups()
+				# annotation 形如 '[q1=...;...]'，去掉引号和方括号
+				inner = annotation[1:-1]	# 去掉引号
+				if inner.startswith('[') and inner.endswith(']'):
+					inner = inner[1:-1]	# 去掉方括号
+				nhx_body = inner.replace(';', ':')
+				nhx = ':{}[&&NHX:{}]'.format(length, nhx_body)
+				# 找注释项后面最近的 ')'
+				next_close = s.find(')', end)
+				if next_close == -1:
+					continue
+				# 删除独立项：前后都有逗号时只删一个，保证 sibling 之间仍保留逗号
+				has_prev_comma = start > 0 and s[start-1] == ','
+				has_next_comma = end < len(s) and s[end] == ','
+				del_start, del_end = start, end
+				if has_prev_comma:
+					del_start = start - 1	# 删前导逗号，保留后续逗号
+				elif has_next_comma:
+					del_end = end + 1	# 删后导逗号
+				s = s[:del_start] + s[del_end:]
+				new_close = next_close - (del_end - del_start)
+				s = s[:new_close+1] + nhx + s[new_close+1:]
+				changed = True
+				break	# 结构变化，重新扫描
+		return s
+
 	def convert(line):
+		# 归一化科学计数法：将大写 E 转为小写 e（兼容 ASTRAL 输出，如 4.03E-4）
+		line = re.sub(r'(?<=\d)E(?=[+-]?\d)', 'e', line)
+		# 处理独立注释项格式: (A:1,'[...]':len,B:2) -> (A:1,B:2):len[&&NHX:...]
+		line = _move_independent(line)
 		last_end = 0
 		patterns = []
-		for match in re.compile(r"'\[(\S+?)\]':(\d+\.?\d*e?\-?\d*)").finditer(line):
+		for match in re.compile(r"'\[(\S+?)\]':(\d+\.?\d*[eE]?[-+]?\d*)").finditer(line):
 			start = match.start()
 			end = match.end()
 			patterns.append( line[last_end:start] )
